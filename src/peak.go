@@ -1,4 +1,4 @@
-package genome
+package src
 
 type Peak struct {
 	pos       Loci

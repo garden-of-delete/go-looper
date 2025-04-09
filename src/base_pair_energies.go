@@ -1,4 +1,4 @@
-package model
+package src
 
 type BasePairEnergies struct {
 	rGG_dCC              float64

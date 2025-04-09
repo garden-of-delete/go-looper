@@ -1,4 +1,4 @@
-package genome
+package src
 
 import (
 	"bufio"
@@ -80,7 +80,7 @@ func parseHeader(header string) (*FastaHeader, error) {
 
 	rangeRegex := regexp.MustCompile(`range=([^:]+):(\d+)-(\d+)`)
 	padRegex := regexp.MustCompile(`([53]'?pad)=(\d+)`)
-	strandRegex := regexp.MustCompile(`strand=([-+])`)
+	strandRegex := regexp.MustCompile(`Strand=([-+])`)
 	repeatMaskRegex := regexp.MustCompile(`repeatMasking=([a-zA-Z0-9]+)`) // Adjusted to be more flexible
 
 	for _, field := range fields[1:] {
@@ -108,6 +108,7 @@ func parseHeader(header string) (*FastaHeader, error) {
 	return parsed, nil
 }
 
+// TODO: support for reading multiple Genes out of a single FASTA file
 func NewGene(filename string) *Gene {
 
 	lines := fileLineScanner(filename)
@@ -129,16 +130,55 @@ func NewGene(filename string) *Gene {
 			}
 		}
 	}
+	if len(seq) < 2 { // from here on, seq should always be initialized and len(seq) > 1
+		log.Fatal("ERROR: can't construct a gene with an empty sequence")
+	}
 
 	return &Gene{
 		GeneName: header.GeneName,
 		Header:   lines[0],
 		Pos: Loci{
-			chromosome: "", // TODO: parse from Header
-			strand:     header.Strand,
-			startPos:   header.Start,
-			endPos:     header.End,
+			Chromosome: "", // TODO: parse from Header
+			Strand:     header.Strand,
+			StartPos:   header.Start,
+			EndPos:     header.End,
 		},
 		Sequence: seq,
 	}
+}
+
+func (g *Gene) printGene() {
+	fmt.Println(g.Header)
+	for _, v := range g.Sequence {
+		fmt.Print(v)
+	}
+	fmt.Print('\n')
+}
+
+// computeStructuresSerial computes structures the legacy way, which is to say serially in a single thread
+// for performance comparison with computeStructures
+func (g *Gene) computeStructuresSerial(model *ModelParams, minLoopLength int) []Structure {
+
+	windows := FromLinearWindows(g.Sequence, minLoopLength)
+	var result []Structure
+	for _, w := range windows {
+		structure := Structure{
+			Pos: Loci{
+				g.Pos.Chromosome,
+				g.Pos.Strand,
+				int64(w.Start), // TODO: loci Pos is in terms of genomic coordinates in rlooper2
+				int64(w.End),
+			},
+			FreeEnergy:      0,
+			BoltzmannFactor: 0,
+			Probability:     0,
+		}
+		model.ComputeStructure(g.Sequence, w, &structure)
+		result = append(result, structure)
+	}
+	return result
+}
+
+func (g *Gene) computeStructuresConcurrent() {
+
 }
