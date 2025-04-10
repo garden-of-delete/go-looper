@@ -1,0 +1,27 @@
+version: 2.1
+
+orbs:
+  go: circleci/go@1.7.1
+
+jobs:
+  test:
+    docker:
+      - image: cimg/go:1.21
+    steps:
+      - checkout
+      - go/load-cache
+      - run:
+          name: Install dependencies
+          command: go mod download
+      - go/save-cache
+      - run:
+          name: Run tests
+          command: go test -v ./...
+      - store_test_results:
+          path: test-results
+
+workflows:
+  version: 2
+  test:
+    jobs:
+      - test 
