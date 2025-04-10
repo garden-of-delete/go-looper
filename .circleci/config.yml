@@ -10,12 +10,11 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Update Dependencies
-          command: go mod tidy
+          name: Setup Go Environment
+          command: |
+            go mod download
+            go mod tidy
       - go/load-cache
-      - run:
-          name: Install dependencies
-          command: go mod download
       - go/save-cache
       - run:
           name: Run tests
