@@ -10,10 +10,8 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Initialize Go Module
-          command: |
-            go mod init github.com/rstolz/go-looper
-            go mod tidy
+          name: Update Dependencies
+          command: go mod tidy
       - go/load-cache
       - run:
           name: Install dependencies
