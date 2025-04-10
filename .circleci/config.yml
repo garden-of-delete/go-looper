@@ -12,10 +12,8 @@ jobs:
       - run:
           name: Setup Go Environment
           command: |
-            go mod download
+            go mod init go-looper
             go mod tidy
-      - go/load-cache
-      - go/save-cache
       - run:
           name: Run tests
           command: go test -v ./...
