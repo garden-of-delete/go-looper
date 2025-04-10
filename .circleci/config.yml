@@ -2,6 +2,7 @@ version: 2.1
 
 orbs:
   go: circleci/go@1.7.1
+  codecov: codecov/codecov@3.2.4
 
 jobs:
   test:
@@ -13,8 +14,14 @@ jobs:
           name: Setup Go Environment
           command: go mod tidy
       - run:
-          name: Run tests
-          command: go test -v ./...
+          name: Run tests with coverage
+          command: |
+            mkdir -p coverage
+            go test -v -coverprofile=coverage/coverage.out -covermode=atomic ./...
+      - run:
+          name: Upload coverage to Codecov
+          command: |
+            bash <(curl -s https://codecov.io/bash) -f coverage/coverage.out
       - store_test_results:
           path: test-results
 
