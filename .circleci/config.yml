@@ -11,9 +11,7 @@ jobs:
       - checkout
       - run:
           name: Setup Go Environment
-          command: |
-            go mod init go-looper
-            go mod tidy
+          command: go mod tidy
       - run:
           name: Run tests
           command: go test -v ./...
