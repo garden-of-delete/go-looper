@@ -9,6 +9,11 @@ jobs:
       - image: cimg/go:1.21
     steps:
       - checkout
+      - run:
+          name: Initialize Go Module
+          command: |
+            go mod init github.com/rstolz/go-looper
+            go mod tidy
       - go/load-cache
       - run:
           name: Install dependencies
