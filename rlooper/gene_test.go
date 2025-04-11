@@ -1,7 +1,6 @@
 package rlooper
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -26,11 +25,8 @@ func TestComputeStructuresSerial(t *testing.T) {
 	if len(result) != 21 {
 		t.Errorf("Expected 21 structures, got %d", len(result))
 	}
-	fmt.Println(len(result2))
+	if len(result2) != 42 {
+		t.Errorf("Expected 42 structures, got %d", len(result2))
+	}
 	// TODO: compare energetics for a structure against manual calculation
-
-
-	// if len(result2) != 21 {
-	// 	t.Errorf("Expected 21 structures, got %d", len(result2))
-	// }
 }

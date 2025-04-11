@@ -147,3 +147,11 @@ func (p *ModelParams) ComputeStructure(seq []rune, w Window, structure *Structur
 	structure.FreeEnergy = freeEnergy + bpEnergy
 	structure.BoltzmannFactor = computeBoltzmannFactor(freeEnergy, p.T)
 }
+
+func (p *ModelParams) GroundStateFactor() float64 {
+	return computeBoltzmannFactor(p.k*math.Pow(p.alpha, 2)-p.a, p.T)
+}
+
+func (p *ModelParams) GroundStateEnergy() float64 {
+	return p.k*math.Pow(p.alpha, 2) - p.a
+}
