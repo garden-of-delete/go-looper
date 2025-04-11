@@ -1,4 +1,4 @@
-package src
+package rlooper
 
 type Loci struct {
 	Chromosome string

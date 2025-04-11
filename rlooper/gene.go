@@ -1,4 +1,4 @@
-package src
+package rlooper
 
 import (
 	"bufio"
@@ -155,11 +155,14 @@ func (g *Gene) printGene() {
 	fmt.Print('\n')
 }
 
-// computeStructuresSerial computes structures the legacy way, which is to say serially in a single thread
+// computeStructuresSerial computes structures the rlooper2 way, which is to say serially in a single thread
 // for performance comparison with computeStructures
-func (g *Gene) computeStructuresSerial(model *ModelParams, minLoopLength int) []Structure {
+func (g *Gene) computeStructuresSerial(model *ModelParams, minLoopLength int, circular bool) []Structure {
 
 	windows := FromLinearWindows(g.Sequence, minLoopLength)
+	if circular {
+		windows = append(windows, FromCircularWindows(g.Sequence, minLoopLength)...)
+	}
 	var result []Structure
 	for _, w := range windows {
 		structure := Structure{
@@ -179,6 +182,9 @@ func (g *Gene) computeStructuresSerial(model *ModelParams, minLoopLength int) []
 	return result
 }
 
-func (g *Gene) computeStructuresConcurrent() {
+// func (g *Gene) computeStructuresConcurrent(model *ModelParams, minLoopLength int) []Structure {
 
-}
+// 	windows := FromLinearWindows(g.Sequence, minLoopLength)
+// 	var result []Structure
+
+// }

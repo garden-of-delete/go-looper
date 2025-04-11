@@ -1,4 +1,4 @@
-package src
+package rlooper
 
 type Peak struct {
 	pos       Loci

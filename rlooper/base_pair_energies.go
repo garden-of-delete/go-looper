@@ -1,4 +1,4 @@
-package src
+package rlooper
 
 type BasePairEnergies struct {
 	rGG_dCC              float64

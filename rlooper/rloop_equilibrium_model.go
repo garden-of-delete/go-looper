@@ -1,4 +1,4 @@
-package src
+package rlooper
 
 import (
 	"math"
@@ -117,7 +117,8 @@ func (p *ModelParams) computeBpsInterval(first rune, second rune) float64 {
 	}
 }
 
-// TODO: should be in Gene ?
+// ComputeStructure computes the free energy of a structure
+// handles structures that cross circular boundaries automatically
 func (p *ModelParams) ComputeStructure(seq []rune, w Window, structure *Structure) {
 	var nBases int
 	if w.End > w.Start { // if structure doesn't cross circular boundary
@@ -131,12 +132,15 @@ func (p *ModelParams) ComputeStructure(seq []rune, w Window, structure *Structur
 
 	var bpEnergy float64
 	for i := w.Start; i != w.End; { // TODO: test
-		b0, b1 := seq[i], seq[i+1]
-		bpEnergy += p.computeBpsInterval(b0, b1)
-		if i != len(seq)-1 { // if at end of the sequence, go back to start
-			i++
-		} else {
+		// Handle the last base pair separately to avoid index out of range
+		if i == len(seq)-1 {
+			b0, b1 := seq[i], seq[0]
+			bpEnergy += p.computeBpsInterval(b0, b1)
 			i = 0
+		} else {
+			b0, b1 := seq[i], seq[i+1]
+			bpEnergy += p.computeBpsInterval(b0, b1)
+			i++
 		}
 	}
 
