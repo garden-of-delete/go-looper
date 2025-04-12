@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Gene bioinformatic representation of a gene
@@ -182,9 +183,61 @@ func (g *Gene) computeStructuresSerial(model *ModelParams, minLoopLength int, ci
 	return result
 }
 
-// func (g *Gene) computeStructuresConcurrent(model *ModelParams, minLoopLength int) []Structure {
+// TODO: need to think about how to structure this
+func (g *Gene) computeStructuresConcurrent(ec ExecutionContext, model *ModelParams, minLoopLength int, circular bool) []Structure {
+	windows := FromLinearWindows(g.Sequence, minLoopLength)
+	if circular {
+		windows = append(windows, FromCircularWindows(g.Sequence, minLoopLength)...)
+	}
+	var result []Structure
+	var mu sync.Mutex
 
-// 	windows := FromLinearWindows(g.Sequence, minLoopLength)
-// 	var result []Structure
+	// Handle case where no threads are requested
+	if ec.NumThreads <= 0 {
+		// Fall back to serial computation
+		return g.computeStructuresSerial(model, minLoopLength, circular)
+	}
 
-// }
+	// Calculate block size once outside the loop
+	blockSize := len(windows) / ec.NumThreads
+	if blockSize == 0 {
+		blockSize = 1
+	}
+
+	ec.WaitGroup.Add(ec.NumThreads)
+	for i := 0; i < ec.NumThreads; i++ { //compute structures in parallel
+		go func(i int) {
+			defer ec.WaitGroup.Done()
+
+			var chunk []Window
+			if i != ec.NumThreads-1 {
+				chunk = windows[i*blockSize : (i+1)*blockSize]
+			} else {
+				chunk = windows[i*blockSize:]
+			}
+
+			var structures []Structure
+			for _, w := range chunk {
+				structure := Structure{
+					Pos: Loci{
+						g.Pos.Chromosome,
+						g.Pos.Strand,
+						int64(w.Start), // TODO: loci Pos is in terms of genomic coordinates in rlooper2
+						int64(w.End),
+					},
+					FreeEnergy:      0,
+					BoltzmannFactor: 0,
+					Probability:     0,
+				}
+				model.ComputeStructure(g.Sequence, w, &structure)
+				structures = append(structures, structure)
+			}
+
+			mu.Lock()
+			result = append(result, structures...)
+			mu.Unlock()
+		}(i)
+	}
+	ec.WaitGroup.Wait()
+	return result
+}
