@@ -14,6 +14,14 @@ jobs:
           name: Setup Go Environment
           command: go mod tidy
       - run:
+          name: Build CLI
+          command: go build -o go_looper
+      - run:
+          name: Verify CLI commands
+          command: |
+            ./go_looper --help
+            ./go_looper version
+      - run:
           name: Run tests with coverage
           command: |
             mkdir -p coverage

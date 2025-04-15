@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"go-looper/cmd"
+	"go_looper/cmd"
 )
 
 func main() {
