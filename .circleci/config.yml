@@ -7,11 +7,16 @@ orbs:
 jobs:
   test:
     docker:
-      - image: cimg/go:1.22
+      - image: golang:1.22
+    environment:
+      GO111MODULE: on
     steps:
       - checkout
-      - go/load-cache
-      - go/mod-download
+      - run:
+          name: Setup Go Environment
+          command: |
+            go mod download
+            go mod verify
       - run:
           name: Build CLI
           command: go build -v -o go_looper
@@ -29,7 +34,6 @@ jobs:
           name: Upload coverage to Codecov
           command: |
             bash <(curl -s https://codecov.io/bash) -f coverage/coverage.out
-      - go/save-cache
       - store_test_results:
           path: test-results
 
