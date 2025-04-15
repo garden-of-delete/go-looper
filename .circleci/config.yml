@@ -17,7 +17,7 @@ jobs:
           name: Run tests with coverage
           command: |
             mkdir -p coverage
-            go test -v -coverprofile=coverage/coverage.out -covermode=atomic ./...
+            go test -v -coverprofile=coverage/coverage.out -covermode=atomic ./rlooper/...
       - run:
           name: Upload coverage to Codecov
           command: |
