@@ -8,8 +8,6 @@ jobs:
   test:
     docker:
       - image: golang:1.22
-    environment:
-      GO111MODULE: on
     steps:
       - checkout
       - run:
