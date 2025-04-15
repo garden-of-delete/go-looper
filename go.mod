@@ -1,4 +1,4 @@
-module github.com/garden-of-delete/go-looper
+module go-looper
 
 go 1.22.1
 

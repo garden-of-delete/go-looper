@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/garden-of-delete/go-looper/cmd"
+	"go-looper/cmd"
 )
 
 func main() {
