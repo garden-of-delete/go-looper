@@ -1,23 +1,15 @@
 package main
 
 import (
-	"fmt"
-	rlooper "go-looper/rlooper"
+	"log"
+	"os"
+
+	"go-looper/cmd"
 )
 
 func main() {
-
-	//gene := src.NewGene("res/pfc53_full.fa")
-	gene := rlooper.NewGene("res/gattaca.fa")
-	// rloopModel := src.NewParamsReasonableDefaults() // best set of experimentally validated params
-	// structures := gene.ComputeStructures(&rloopModel)
-
-	windows := rlooper.FromLinearWindows(gene.Sequence, 2)
-	fmt.Println(windows)
-
-	// for _, w := range windows {
-	// 	w.Start
-	// }
-
-	fmt.Println(gene.GeneName)
+	if err := cmd.Execute(); err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
 }

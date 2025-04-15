@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 // Gene bioinformatic representation of a gene
@@ -31,12 +30,12 @@ type FastaHeader struct {
 	RepeatMasking string
 }
 
-func fileLineScanner(filename string) []string {
+func fileLineScanner(filename string) ([]string, error) {
 
 	var values []string
 	file, err := os.Open(filename)
 	if err != nil {
-		log.Fatal(err)
+		return values, err
 	}
 	defer func(file *os.File) {
 		err := file.Close()
@@ -56,15 +55,15 @@ func fileLineScanner(filename string) []string {
 	if len(values) == 0 {
 		log.Fatal("ERROR: unable to read lines from input file")
 	}
-	return values
+	return values, nil
 }
 
-func atoiToInt64(s string) int64 {
+func atoiToInt64(s string) (int64, error) {
 	n, err := strconv.Atoi(s)
 	if err != nil {
-		log.Print("WARN: invalid strconv.Atoi result: ", n)
+		return 0, fmt.Errorf("invalid strconv.Atoi result: %v", err)
 	}
-	return int64(n)
+	return int64(n), nil
 }
 
 func parseHeader(header string) (*FastaHeader, error) {
@@ -87,8 +86,16 @@ func parseHeader(header string) (*FastaHeader, error) {
 	for _, field := range fields[1:] {
 		if matches := rangeRegex.FindStringSubmatch(field); matches != nil {
 			parsed.BasePairRange = matches[1] + ":" + matches[2] + "-" + matches[3]
-			parsed.Start = atoiToInt64(matches[2])
-			parsed.End = atoiToInt64(matches[3])
+			start, err := atoiToInt64(matches[2])
+			if err != nil {
+				return nil, fmt.Errorf("invalid start position: %v", err)
+			}
+			end, err := atoiToInt64(matches[3])
+			if err != nil {
+				return nil, fmt.Errorf("invalid end position: %v", err)
+			}
+			parsed.Start = start
+			parsed.End = end
 		}
 		if matches := padRegex.FindStringSubmatch(field); matches != nil {
 			val, _ := strconv.Atoi(matches[2])
@@ -112,7 +119,10 @@ func parseHeader(header string) (*FastaHeader, error) {
 // TODO: support for reading multiple Genes out of a single FASTA file
 func NewGene(filename string) *Gene {
 
-	lines := fileLineScanner(filename)
+	lines, err := fileLineScanner(filename)
+	if err != nil {
+		log.Fatal("ERROR: unable to read lines from input file: ", filename)
+	}
 	header, err := parseHeader(lines[0])
 	if err != nil {
 		log.Fatal("ERROR: unable to parse FASTA Header for input: ", filename)
@@ -183,14 +193,11 @@ func (g *Gene) computeStructuresSerial(model *ModelParams, minLoopLength int, ci
 	return result
 }
 
-// TODO: need to think about how to structure this
-func (g *Gene) computeStructuresConcurrent(ec ExecutionContext, model *ModelParams, minLoopLength int, circular bool) []Structure {
+func (g *Gene) computeStructuresConcurrent(ec *ExecutionContext, model *ModelParams, minLoopLength int, circular bool) []Structure {
 	windows := FromLinearWindows(g.Sequence, minLoopLength)
 	if circular {
 		windows = append(windows, FromCircularWindows(g.Sequence, minLoopLength)...)
 	}
-	var result []Structure
-	var mu sync.Mutex
 
 	// Handle case where no threads are requested
 	if ec.NumThreads <= 0 {
@@ -198,11 +205,17 @@ func (g *Gene) computeStructuresConcurrent(ec ExecutionContext, model *ModelPara
 		return g.computeStructuresSerial(model, minLoopLength, circular)
 	}
 
-	// Calculate block size once outside the loop
+	// Calculate block size once outside the loop, edge case where n windows are less than numThreads
 	blockSize := len(windows) / ec.NumThreads
 	if blockSize == 0 {
 		blockSize = 1
 	}
+
+	// Create a channel with a reasonable buffer size
+	structureChan := make(chan []Structure, ec.NumThreads)
+
+	// Create an empty slice for results
+	results := make([]Structure, 0)
 
 	ec.WaitGroup.Add(ec.NumThreads)
 	for i := 0; i < ec.NumThreads; i++ { //compute structures in parallel
@@ -216,7 +229,8 @@ func (g *Gene) computeStructuresConcurrent(ec ExecutionContext, model *ModelPara
 				chunk = windows[i*blockSize:]
 			}
 
-			var structures []Structure
+			// Collect structures for this chunk
+			chunkStructures := make([]Structure, 0, len(chunk))
 			for _, w := range chunk {
 				structure := Structure{
 					Pos: Loci{
@@ -230,14 +244,22 @@ func (g *Gene) computeStructuresConcurrent(ec ExecutionContext, model *ModelPara
 					Probability:     0,
 				}
 				model.ComputeStructure(g.Sequence, w, &structure)
-				structures = append(structures, structure)
+				chunkStructures = append(chunkStructures, structure)
 			}
-
-			mu.Lock()
-			result = append(result, structures...)
-			mu.Unlock()
+			structureChan <- chunkStructures
 		}(i)
 	}
-	ec.WaitGroup.Wait()
-	return result
+
+	// Start a goroutine to close the channel when all workers are done
+	go func() {
+		ec.WaitGroup.Wait()
+		close(structureChan)
+	}()
+
+	// Collect all structures from the channel
+	for chunk := range structureChan {
+		results = append(results, chunk...)
+	}
+
+	return results
 }
