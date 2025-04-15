@@ -12,7 +12,9 @@ jobs:
       - checkout
       - run:
           name: Setup Go Environment
-          command: go mod tidy
+          command: |
+            go mod init go_looper
+            go mod tidy
       - run:
           name: Build CLI
           command: go build -o go_looper
