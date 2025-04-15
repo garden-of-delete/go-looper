@@ -13,7 +13,7 @@ jobs:
       - run:
           name: Setup Go Environment
           command: |
-            go mod init go_looper
+            cd /home/circleci/project
             go mod tidy
       - run:
           name: Build CLI
