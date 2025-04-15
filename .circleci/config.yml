@@ -8,44 +8,28 @@ jobs:
   test:
     docker:
       - image: cimg/go:1.22
-    environment:
-      GOPATH: /home/circleci/go
     steps:
       - checkout
-      - run:
-          name: Setup Go Environment
-          command: |
-            cd /home/circleci/project
-            echo "Current directory: $(pwd)"
-            echo "Listing files:"
-            ls -la
-            echo "Go version:"
-            go version
-            echo "Go env:"
-            go env
-            go mod tidy
+      - go/load-cache
+      - go/mod-download
       - run:
           name: Build CLI
-          command: |
-            cd /home/circleci/project
-            go build -v -o go_looper
+          command: go build -v -o go_looper
       - run:
           name: Verify CLI commands
           command: |
-            cd /home/circleci/project
             ./go_looper --help
             ./go_looper version
       - run:
           name: Run tests with coverage
           command: |
-            cd /home/circleci/project
             mkdir -p coverage
             go test -v -coverprofile=coverage/coverage.out -covermode=atomic ./...
       - run:
           name: Upload coverage to Codecov
           command: |
-            cd /home/circleci/project
             bash <(curl -s https://codecov.io/bash) -f coverage/coverage.out
+      - go/save-cache
       - store_test_results:
           path: test-results
 
