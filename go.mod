@@ -1,4 +1,4 @@
-module go_looper
+module golooper
 
 go 1.22.1
 
