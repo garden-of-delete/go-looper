@@ -24,6 +24,8 @@ type Config struct {
 	Residuals            bool
 	LocalAverageEnergy   bool
 	Homopolymer          *float64
+	InfileName           string
+	OutfileName          string
 }
 
 var (
@@ -38,6 +40,8 @@ var (
 	complement           bool
 	unconstrained        bool
 	homopolymer          float64
+	infilename           string
+	outfilename          string
 )
 
 var rootCmd = &cobra.Command{
@@ -46,6 +50,9 @@ var rootCmd = &cobra.Command{
 	Long: `Go Looper is a CLI application that provides various commands
 for running biophysical simulations on nucleic acid energetics with an emphasis on R-loops (genomic DNA/RNA hybrids).`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		config.InfileName = infilename
+		config.OutfileName = outfilename
+
 		// Set the pointers in the config only if the flags are set
 		cmd.Flags().Visit(func(f *pflag.Flag) {
 			switch f.Name {
@@ -101,6 +108,8 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&config.Residuals, "residuals", "R", false, "calculate and output residual superhelicity for each structure")
 	rootCmd.PersistentFlags().BoolVarP(&config.LocalAverageEnergy, "local-average-energy", "l", false, "use local average energy for the simulation")
 	rootCmd.PersistentFlags().Float64VarP(&homopolymer, "homopolymer", "H", 0.0, "override base pairing energetics with constant value in Kcal/mol")
+	rootCmd.PersistentFlags().StringVarP(&infilename, "input", "f", "", "input file name (required)")
+	rootCmd.PersistentFlags().StringVarP(&outfilename, "output", "o", "", "output file name (required)")
 
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "show-config",
@@ -160,4 +169,7 @@ Values not explicitly set via command line flags will use the model's default va
 			fmt.Println("---------------------")
 		},
 	})
+
+	rootCmd.MarkPersistentFlagRequired("input")
+	rootCmd.MarkPersistentFlagRequired("output")
 }
