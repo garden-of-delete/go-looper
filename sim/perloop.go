@@ -4,73 +4,61 @@ import (
 	"fmt"
 	"os"
 
-	"golooper/cmd"
+	"golooper/config"
 )
 
-func SimulationA(config *cmd.Config) error {
-
-	// Open output files
-	basePairProbWig, err := os.Create(config.OutfileName + "_bpprob.wig")
+func SimulationA(config *config.Config) error {
+	infile, err := os.Open(config.InfileName)
 	if err != nil {
-		return fmt.Errorf("error creating bpprob wig file: %v", err)
+		return fmt.Errorf("error opening input file: %v", err)
 	}
-	defer basePairProbWig.Close()
+	defer infile.Close()
 
-	averageEnergyWig, err := os.Create(config.OutfileName + "_avgG.wig")
+	// Create all output files using FileOps
+	outFiles, err := CreateOutputFiles(config) // TODO: move fileops use to first place results are written
 	if err != nil {
-		return fmt.Errorf("error creating avgG wig file: %v", err)
+		return fmt.Errorf("error creating output files: %v", err)
 	}
-	defer averageEnergyWig.Close()
+	defer outFiles.Close()
 
-	minFreeEnergyWig, err := os.Create(config.OutfileName + "_mfe.wig")
+	// Test reading first few bytes of input file to validate it's accessible
+	testBuf := make([]byte, 100)
+	n, err := infile.Read(testBuf)
 	if err != nil {
-		return fmt.Errorf("error creating mfe wig file: %v", err)
+		return fmt.Errorf("error reading from input file: %v", err)
 	}
-	defer minFreeEnergyWig.Close()
+	if n == 0 {
+		return fmt.Errorf("input file is empty")
+	}
 
-	basePairProbBed, err := os.Create(config.OutfileName + "_bpprob.bed")
+	// Reset file pointer to beginning after test read
+	_, err = infile.Seek(0, 0)
 	if err != nil {
-		return fmt.Errorf("error creating bpprob bed file: %v", err)
-	}
-	defer basePairProbBed.Close()
-
-	minFreeEnergyBed, err := os.Create(config.OutfileName + "_mfe.bed")
-	if err != nil {
-		return fmt.Errorf("error creating mfe bed file: %v", err)
-	}
-	defer minFreeEnergyBed.Close()
-
-	extendedBasePairProbWig, err := os.Create(config.OutfileName + "_extbpprob.wig")
-	if err != nil {
-		return fmt.Errorf("error creating extbpprob wig file: %v", err)
-	}
-	defer extendedBasePairProbWig.Close()
-
-	// Write headers to wig files
-	if err := writeWigfileHeader(basePairProbWig, "Base pair probability"); err != nil {
-		return fmt.Errorf("error writing bpprob wig header: %v", err)
+		return fmt.Errorf("error resetting file position: %v", err)
 	}
 
-	if err := writeWigfileHeader(averageEnergyWig, "Average free energy"); err != nil {
-		return fmt.Errorf("error writing avgG wig header: %v", err)
+	// Test writing to output files
+	testStr := "Test output\n"
+	if _, err := outFiles.BasePairProbWig.WriteString(testStr); err != nil {
+		return fmt.Errorf("error writing to base pair prob wig: %v", err)
+	}
+	if _, err := outFiles.AverageEnergyWig.WriteString(testStr); err != nil {
+		return fmt.Errorf("error writing to average energy wig: %v", err)
+	}
+	if _, err := outFiles.MinFreeEnergyWig.WriteString(testStr); err != nil {
+		return fmt.Errorf("error writing to min free energy wig: %v", err)
+	}
+	if _, err := outFiles.BasePairProbBed.WriteString(testStr); err != nil {
+		return fmt.Errorf("error writing to base pair prob bed: %v", err)
+	}
+	if _, err := outFiles.MinFreeEnergyBed.WriteString(testStr); err != nil {
+		return fmt.Errorf("error writing to min free energy bed: %v", err)
+	}
+	if _, err := outFiles.ExtendedBasePairProbWig.WriteString(testStr); err != nil {
+		return fmt.Errorf("error writing to extended base pair prob wig: %v", err)
 	}
 
-	if err := writeWigfileHeader(minFreeEnergyWig, "Minimum free energy"); err != nil {
-		return fmt.Errorf("error writing mfe wig header: %v", err)
-	}
-
-	if err := writeWigfileHeader(extendedBasePairProbWig, "Extended base pair probability"); err != nil {
-		return fmt.Errorf("error writing extbpprob wig header: %v", err)
-	}
-
-	// Write headers to bed files
-	if err := writeBedfileHeader(basePairProbBed, "Base pair probability"); err != nil {
-		return fmt.Errorf("error writing bpprob bed header: %v", err)
-	}
-
-	if err := writeBedfileHeader(minFreeEnergyBed, "Minimum free energy"); err != nil {
-		return fmt.Errorf("error writing mfe bed header: %v", err)
-	}
+	// TODO: Add the rest of the simulation logic here
 
 	return nil
 }

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"golooper/sim"
+
 	"github.com/spf13/cobra"
 )
 
@@ -14,14 +16,21 @@ var perloopCmd = &cobra.Command{
 and energetics. This command takes an input file containing sequence data and
 generates output at the specified path.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Basic validation
-		if _, err := os.Stat(config.InfileName); os.IsNotExist(err) {
-			fmt.Printf("Error: input file %s does not exist\n", config.InfileName)
+		// Validate required flags
+		if cfg.InfileName == "" {
+			fmt.Println("Error: input file is required")
+			os.Exit(1)
+		}
+		if cfg.OutfileName == "" {
+			fmt.Println("Error: output file is required")
 			os.Exit(1)
 		}
 
-		// TODO: Implement the actual perloop analysis logic here
-		fmt.Printf("Running perloop analysis on %s, output will be saved to %s\n", config.InfileName, config.OutfileName)
+		// Run the simulation
+		if err := sim.SimulationA(&cfg); err != nil {
+			fmt.Printf("Error running simulation: %v\n", err)
+			os.Exit(1)
+		}
 	},
 }
 
