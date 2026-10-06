@@ -11,25 +11,22 @@ import (
 )
 
 func TestFileOps(t *testing.T) {
-	// Create a temporary directory for test files
 	tempDir, err := os.MkdirTemp("", "golooper_test_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create a test config
 	testConfig := &config.Config{
 		OutfileName: filepath.Join(tempDir, "test_output"),
 	}
+	base := filepath.Base(testConfig.OutfileName)
 
-	// Test file creation
 	fileOps, err := CreateOutputFiles(testConfig)
 	if err != nil {
 		t.Fatalf("Failed to create output files: %v", err)
 	}
 
-	// Verify all files were created
 	expectedFiles := []string{
 		"_bpprob.wig",
 		"_avgG.wig",
@@ -46,22 +43,18 @@ func TestFileOps(t *testing.T) {
 		}
 	}
 
-	// Test wig file headers
-	checkWigHeader(t, fileOps.BasePairProbWig, "Base Pair Probability")
-	checkWigHeader(t, fileOps.AverageEnergyWig, "Average Energy")
-	checkWigHeader(t, fileOps.MinFreeEnergyWig, "Minimum Free Energy")
-	checkWigHeader(t, fileOps.ExtendedBasePairProbWig, "Extended Base Pair Probability")
+	checkWigHeader(t, fileOps.BasePairProbWig, "signal1_"+base)
+	checkWigHeader(t, fileOps.AverageEnergyWig, "signal2_"+base)
+	checkWigHeader(t, fileOps.MinFreeEnergyWig, "signal3_"+base)
+	checkWigHeader(t, fileOps.ExtendedBasePairProbWig, "signal4_"+base)
 
-	// Test bed file headers
-	checkBedHeader(t, fileOps.BasePairProbBed, "Base Pair Probability")
-	checkBedHeader(t, fileOps.MinFreeEnergyBed, "Minimum Free Energy")
+	checkBedHeader(t, fileOps.BasePairProbBed, "signal1_peaks_"+base)
+	checkBedHeader(t, fileOps.MinFreeEnergyBed, "signal3_peaks_"+base)
 
-	// Test file closing
 	if err := fileOps.Close(); err != nil {
 		t.Errorf("Failed to close files: %v", err)
 	}
 
-	// Verify files are closed by trying to read them
 	for _, suffix := range expectedFiles {
 		filePath := testConfig.OutfileName + suffix
 		file, err := os.OpenFile(filePath, os.O_RDONLY, 0)
@@ -76,7 +69,6 @@ func TestFileOps(t *testing.T) {
 func checkWigHeader(t *testing.T, file *os.File, expectedName string) {
 	t.Helper()
 
-	// Reset file position to beginning
 	if _, err := file.Seek(0, 0); err != nil {
 		t.Errorf("Failed to seek to beginning of file: %v", err)
 		return
@@ -98,7 +90,6 @@ func checkWigHeader(t *testing.T, file *os.File, expectedName string) {
 func checkBedHeader(t *testing.T, file *os.File, expectedName string) {
 	t.Helper()
 
-	// Reset file position to beginning
 	if _, err := file.Seek(0, 0); err != nil {
 		t.Errorf("Failed to seek to beginning of file: %v", err)
 		return

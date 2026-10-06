@@ -62,9 +62,17 @@ func ComputeSignals(seq []byte, m *EnergyModel, minLength int, ens EnsembleResul
 	return sig
 }
 
+func StructureResiduals(m *EnergyModel, r StructureRecord) (twist, linkingDifference float64) {
+	l := float64(r.End - r.Start)
+	fourPiSqC := 4 * math.Pi * math.Pi * m.C
+	denom := fourPiSqC + m.K*l
+	linkingDifference = (fourPiSqC / denom) * (m.Alpha + l*m.A)
+	twist = (2 * math.Pi * m.K / denom) * (m.Alpha + l*m.A)
+	return twist, linkingDifference
+}
+
 func ComputeResiduals(seq []byte, m *EnergyModel, minLength int, ens EnsembleResult) Residuals {
 	var res Residuals
-	fourPiSqC := 4 * math.Pi * math.Pi * m.C
 
 	if ens.NumStructures > 0 {
 		p := PrefixBPEnergies(seq, m)
@@ -74,9 +82,7 @@ func ComputeResiduals(seq []byte, m *EnergyModel, minLength int, ens EnsembleRes
 				g := windowEnergy(m, p, s, e)
 				prob := math.Exp(-g/rt - ens.LogZ)
 				l := float64(e - s)
-				denom := fourPiSqC + m.K*l
-				rld := (fourPiSqC / denom) * (m.Alpha + l*m.A)
-				rtw := (2 * math.Pi * m.K / denom) * (m.Alpha + l*m.A)
+				rtw, rld := StructureResiduals(m, StructureRecord{Start: s, End: e})
 				res.Twist += rtw * prob
 				res.LinkingDifference += rld * prob
 				res.WrappingAbsorption += (m.Alpha - rld + l*m.A) * prob
