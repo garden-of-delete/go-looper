@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"runtime"
 	"strconv"
 
 	"golooper/config"
@@ -22,8 +23,11 @@ var reverse bool
 var complement bool
 var unconstrained bool
 var homopolymer float64
+var sensitivity int
+var top int
 var infilename string
 var outfilename string
+var threads int
 
 var rootCmd = &cobra.Command{
 	Use:   "golooper [subcommand] [input_file] [output_path] [options]",
@@ -60,9 +64,23 @@ for running biophysical simulations on nucleic acid energetics with an emphasis 
 				cfg.Unconstrained = &unconstrained
 			case "homopolymer":
 				cfg.Homopolymer = &homopolymer
+			case "sensitivity":
+				cfg.Sensitivity = &sensitivity
+			case "top":
+				cfg.Top = &top
 			}
 		})
 	},
+}
+
+func requireInputOutput() error {
+	if cfg.InfileName == "" {
+		return fmt.Errorf("input file is required (use -f/--input)")
+	}
+	if cfg.OutfileName == "" {
+		return fmt.Errorf("output file is required (use -o/--output)")
+	}
+	return nil
 }
 
 // GetConfig returns the current configuration
@@ -132,13 +150,11 @@ Values not explicitly set via command line flags will use the model's default va
 			fmt.Printf("Dump Calculations (--dump): %v\n", cfg.Dump)
 			fmt.Printf("Circular Sequence (--circular): %v\n", cfg.Circular)
 			fmt.Printf("Calculate Residuals (--residuals): %v\n", cfg.Residuals)
-			fmt.Printf("Local Average Energy (--local-average-energy): %v\n", cfg.LocalAverageEnergy)
+			fmt.Printf("Local Average Energy (--localaverageenergy): %v\n", cfg.LocalAverageEnergy)
 			fmt.Println("---------------------")
 		},
 	})
 
-	rootCmd.MarkPersistentFlagRequired("input")
-	rootCmd.MarkPersistentFlagRequired("output")
 }
 
 func initFlags() {
@@ -153,8 +169,12 @@ func initFlags() {
 	rootCmd.PersistentFlags().BoolVarP(&cfg.Dump, "dump", "d", false, "dump all structures computed by the program to file")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.Circular, "circular", "C", false, "treat sequence as circular")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.Residuals, "residuals", "R", false, "calculate and output residual superhelicity for each structure")
-	rootCmd.PersistentFlags().BoolVarP(&cfg.LocalAverageEnergy, "local-average-energy", "l", false, "use local average energy for the simulation")
+	rootCmd.PersistentFlags().BoolVarP(&cfg.LocalAverageEnergy, "localaverageenergy", "l", false, "use local average energy for the simulation")
 	rootCmd.PersistentFlags().Float64VarP(&homopolymer, "homopolymer", "H", 0.0, "override base pairing energetics with constant value in Kcal/mol")
+	rootCmd.PersistentFlags().BoolVar(&cfg.Bedfile, "bedfile", false, "call peaks and write them to the bed output files")
+	rootCmd.PersistentFlags().IntVar(&sensitivity, "sensitivity", 1, "power-of-ten exponent for the absolute peak-calling threshold")
+	rootCmd.PersistentFlags().IntVar(&top, "top", 0, "print the N most probable structures to stdout")
 	rootCmd.PersistentFlags().StringVarP(&infilename, "input", "f", "", "input file name (required)")
 	rootCmd.PersistentFlags().StringVarP(&outfilename, "output", "o", "", "output file name (required)")
+	rootCmd.PersistentFlags().IntVar(&threads, "threads", runtime.NumCPU(), "number of worker goroutines to use for computation")
 }

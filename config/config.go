@@ -16,6 +16,9 @@ type Config struct {
 	Residuals            bool
 	LocalAverageEnergy   bool
 	Homopolymer          *float64
+	Bedfile              bool
+	Sensitivity          *int
+	Top                  *int
 	InfileName           string
 	OutfileName          string
 }

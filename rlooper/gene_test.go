@@ -75,6 +75,15 @@ func TestApplyOrientationInvertFlagCombinesComplementAndReverse(t *testing.T) {
 	}
 }
 
+func TestApplyOrientationComplementFlagIdempotentWithInvert(t *testing.T) {
+	g := &Gene{Sequence: []byte("AACG"), Loc: Loci{Strand: "+"}}
+	g.ApplyOrientation(true, false, true)
+	want := "GCAA"
+	if string(g.Sequence) != want {
+		t.Fatalf("ApplyOrientation(complement=true, reverse=false, invert=true) on strand \"+\" AACG = %q, want %q (traced: strand \"+\" complements AACG->TTGC; complement_flag, set true by both --complement and --invert, complements once more TTGC->AACG; reverse_flag, set true by --invert, reverses once AACG->GCAA)", string(g.Sequence), want)
+	}
+}
+
 func TestReadGenesHeaderless(t *testing.T) {
 	genes, err := ReadGenes(strings.NewReader(">x\nACGT\n"))
 	if err != nil || len(genes) != 1 {

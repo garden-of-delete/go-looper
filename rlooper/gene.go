@@ -117,14 +117,10 @@ func (g *Gene) ApplyOrientation(complement, reverse, invert bool) {
 	case "-":
 		g.Invert()
 	}
-	if complement {
+	if complement || invert {
 		g.Complement()
 	}
-	if reverse {
-		g.Invert()
-	}
-	if invert {
-		g.Complement()
+	if reverse || invert {
 		g.Invert()
 	}
 }
