@@ -9,6 +9,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var sigmaMin float64
+var sigmaMax float64
+var sigmaStep float64
+
 var perloopCmd = &cobra.Command{
 	Use:   "perloop",
 	Short: "Run perloop analysis on nucleic acid sequences",
@@ -19,7 +23,7 @@ generates output at the specified path.`,
 		return requireInputOutput()
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := sim.SimulationA(&cfg); err != nil {
+		if err := sim.RunPerloop(&cfg, sigmaMin, sigmaMax, sigmaStep, threads); err != nil {
 			fmt.Printf("Error running simulation: %v\n", err)
 			os.Exit(1)
 		}
@@ -27,5 +31,10 @@ generates output at the specified path.`,
 }
 
 func init() {
+	perloopCmd.Flags().Float64Var(&sigmaMin, "sigma-min", 0, "lower bound of the superhelicity sweep")
+	perloopCmd.Flags().Float64Var(&sigmaMax, "sigma-max", 0, "upper bound of the superhelicity sweep")
+	perloopCmd.Flags().Float64Var(&sigmaStep, "sigma-step", 0.01, "step size of the superhelicity sweep")
+	perloopCmd.MarkFlagRequired("sigma-min")
+	perloopCmd.MarkFlagRequired("sigma-max")
 	rootCmd.AddCommand(perloopCmd)
 }

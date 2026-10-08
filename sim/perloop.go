@@ -5,60 +5,53 @@ import (
 	"os"
 
 	"golooper/config"
+	"golooper/rlooper"
 )
 
-func SimulationA(config *config.Config) error {
-	infile, err := os.Open(config.InfileName)
+func sigmaGrid(lo, hi, step float64) []float64 {
+	var sigmas []float64
+	for i := 0; ; i++ {
+		s := lo + float64(i)*step
+		if s > hi+1e-4 {
+			break
+		}
+		sigmas = append(sigmas, s)
+	}
+	return sigmas
+}
+
+func RunPerloop(cfg *config.Config, lo, hi, step float64, threads int) error {
+	infile, err := os.Open(cfg.InfileName)
 	if err != nil {
 		return fmt.Errorf("error opening input file: %v", err)
 	}
 	defer infile.Close()
 
-	// Create all output files using FileOps
-	outFiles, err := CreateOutputFiles(config) // TODO: move fileops use to first place results are written
+	genes, err := rlooper.ReadGenes(infile)
 	if err != nil {
-		return fmt.Errorf("error creating output files: %v", err)
+		return fmt.Errorf("error reading genes: %v", err)
 	}
-	defer outFiles.Close()
+	if len(genes) == 0 {
+		return fmt.Errorf("no genes found in input file")
+	}
+	g := genes[0]
 
-	// Test reading first few bytes of input file to validate it's accessible
-	testBuf := make([]byte, 100)
-	n, err := infile.Read(testBuf)
+	p := paramsFromConfig(cfg, threads)
+	g.ApplyOrientation(p.complement, p.reverse, cfg.Invert)
+
+	outFile, err := createFileWithDir(cfg.OutfileName + "_perloop.txt")
 	if err != nil {
-		return fmt.Errorf("error reading from input file: %v", err)
+		return fmt.Errorf("error creating perloop output file: %v", err)
 	}
-	if n == 0 {
-		return fmt.Errorf("input file is empty")
-	}
+	defer outFile.Close()
 
-	// Reset file pointer to beginning after test read
-	_, err = infile.Seek(0, 0)
-	if err != nil {
-		return fmt.Errorf("error resetting file position: %v", err)
+	for _, sigma := range sigmaGrid(lo, hi, step) {
+		p.model.SetSigma(sigma)
+		ens := rlooper.ComputeEnsemble(g.Sequence, p.model, p.minLength, p.threads)
+		if _, err := fmt.Fprintf(outFile, "%s %s\n", formatValue(sigma), formatValue(1-ens.PGround)); err != nil {
+			return fmt.Errorf("error writing perloop output: %v", err)
+		}
 	}
-
-	// Test writing to output files
-	testStr := "Test output\n"
-	if _, err := outFiles.BasePairProbWig.WriteString(testStr); err != nil {
-		return fmt.Errorf("error writing to base pair prob wig: %v", err)
-	}
-	if _, err := outFiles.AverageEnergyWig.WriteString(testStr); err != nil {
-		return fmt.Errorf("error writing to average energy wig: %v", err)
-	}
-	if _, err := outFiles.MinFreeEnergyWig.WriteString(testStr); err != nil {
-		return fmt.Errorf("error writing to min free energy wig: %v", err)
-	}
-	if _, err := outFiles.BasePairProbBed.WriteString(testStr); err != nil {
-		return fmt.Errorf("error writing to base pair prob bed: %v", err)
-	}
-	if _, err := outFiles.MinFreeEnergyBed.WriteString(testStr); err != nil {
-		return fmt.Errorf("error writing to min free energy bed: %v", err)
-	}
-	if _, err := outFiles.ExtendedBasePairProbWig.WriteString(testStr); err != nil {
-		return fmt.Errorf("error writing to extended base pair prob wig: %v", err)
-	}
-
-	// TODO: Add the rest of the simulation logic here
 
 	return nil
 }
