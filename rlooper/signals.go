@@ -1,6 +1,9 @@
 package rlooper
 
-import "math"
+import (
+	"math"
+	"sync"
+)
 
 type Signals struct {
 	BPProb, AvgG, MFE []float64
@@ -10,43 +13,94 @@ type Residuals struct {
 	Twist, LinkingDifference, Superhelicity, WrappingAbsorption, StrandSeparation float64
 }
 
+type signalAccum struct {
+	bpDiff, numDiff, denDiff []float64
+}
+
+func newSignalAccum(n int, withAvgG bool) signalAccum {
+	acc := signalAccum{bpDiff: make([]float64, n+1)}
+	if withAvgG {
+		acc.numDiff = make([]float64, n+1)
+		acc.denDiff = make([]float64, n+1)
+	}
+	return acc
+}
+
+func (a *signalAccum) addWindow(s, e int, g, prob float64, withAvgG bool) {
+	a.bpDiff[s] += prob
+	a.bpDiff[e] -= prob
+	if withAvgG {
+		a.numDiff[s] += prob * g
+		a.numDiff[e] -= prob * g
+		a.denDiff[s] += prob
+		a.denDiff[e] -= prob
+	}
+}
+
+func (a *signalAccum) merge(o signalAccum) {
+	for i := range a.bpDiff {
+		a.bpDiff[i] += o.bpDiff[i]
+	}
+	if a.numDiff == nil {
+		return
+	}
+	for i := range a.numDiff {
+		a.numDiff[i] += o.numDiff[i]
+		a.denDiff[i] += o.denDiff[i]
+	}
+}
+
 func ComputeSignals(seq []byte, m *EnergyModel, minLength int, ens EnsembleResult, withAvgG bool, workers int) Signals {
 	n := len(seq)
 	sig := Signals{BPProb: make([]float64, n), MFE: make([]float64, n)}
+	if withAvgG {
+		sig.AvgG = make([]float64, n)
+	}
 
 	p := PrefixBPEnergies(seq, m)
 	rt := m.RT()
+	workers = clampWorkers(workers, n)
 
-	bpDiff := make([]float64, n+1)
-	var numDiff, denDiff []float64
-	if withAvgG {
-		sig.AvgG = make([]float64, n)
-		numDiff = make([]float64, n+1)
-		denDiff = make([]float64, n+1)
-	}
-
-	for s := 0; s < n; s++ {
-		for e := s + minLength - 1; e < n; e++ {
-			g := windowEnergy(m, p, s, e)
-			prob := math.Exp(-g/rt - ens.LogZ)
-			bpDiff[s] += prob
-			bpDiff[e] -= prob
-			if withAvgG {
-				numDiff[s] += prob * g
-				numDiff[e] -= prob * g
-				denDiff[s] += prob
-				denDiff[e] -= prob
+	acc := newSignalAccum(n, withAvgG)
+	if workers <= 1 {
+		for s := 0; s < n; s++ {
+			for e := s + minLength - 1; e < n; e++ {
+				g := windowEnergy(m, p, s, e)
+				prob := math.Exp(-g/rt - ens.LogZ)
+				acc.addWindow(s, e, g, prob, withAvgG)
 			}
+		}
+	} else {
+		results := make([]signalAccum, workers)
+		var wg sync.WaitGroup
+		for c := 0; c < workers; c++ {
+			wg.Add(1)
+			go func(c int) {
+				defer wg.Done()
+				chunk := newSignalAccum(n, withAvgG)
+				for s := c; s < n; s += workers {
+					for e := s + minLength - 1; e < n; e++ {
+						g := windowEnergy(m, p, s, e)
+						prob := math.Exp(-g/rt - ens.LogZ)
+						chunk.addWindow(s, e, g, prob, withAvgG)
+					}
+				}
+				results[c] = chunk
+			}(c)
+		}
+		wg.Wait()
+		for _, r := range results {
+			acc.merge(r)
 		}
 	}
 
 	var bpAcc, numAcc, denAcc float64
 	for i := 0; i < n; i++ {
-		bpAcc += bpDiff[i]
+		bpAcc += acc.bpDiff[i]
 		sig.BPProb[i] = bpAcc
 		if withAvgG {
-			numAcc += numDiff[i]
-			denAcc += denDiff[i]
+			numAcc += acc.numDiff[i]
+			denAcc += acc.denDiff[i]
 			if denAcc > 0 {
 				sig.AvgG[i] = numAcc / denAcc
 			}

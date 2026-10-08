@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"math"
 	"slices"
+	"sync"
 )
 
 type EnsembleResult struct {
@@ -69,39 +70,92 @@ func windowEnergy(m *EnergyModel, p []float64, s, e int) float64 {
 	return m.SupercoilingEnergy(e-s+1) + (p[e] - p[s])
 }
 
+func clampWorkers(workers, rows int) int {
+	if workers > rows {
+		return rows
+	}
+	return workers
+}
+
+type ensembleAccum struct {
+	lse   logSumExp
+	mfe   StructureRecord
+	count int
+}
+
+func newEnsembleAccum() ensembleAccum {
+	return ensembleAccum{lse: newLogSumExp()}
+}
+
+func (a *ensembleAccum) addWindow(s, e int, g, rt float64) {
+	a.lse.add(-g / rt)
+	rec := StructureRecord{Start: s, End: e, Energy: g}
+	if a.count == 0 || compareStructures(rec, a.mfe) < 0 {
+		a.mfe = rec
+	}
+	a.count++
+}
+
+func (a *ensembleAccum) merge(o ensembleAccum) {
+	a.lse.merge(o.lse)
+	if o.count == 0 {
+		return
+	}
+	if a.count == 0 || compareStructures(o.mfe, a.mfe) < 0 {
+		a.mfe = o.mfe
+	}
+	a.count += o.count
+}
+
 func ComputeEnsemble(seq []byte, m *EnergyModel, minLength, workers int) EnsembleResult {
 	p := PrefixBPEnergies(seq, m)
 	rt := m.RT()
-	lse := newLogSumExp()
-	var mfe StructureRecord
-	numStructures := 0
+	n := len(seq)
+	workers = clampWorkers(workers, n)
 
-	for s := 0; s < len(seq); s++ {
-		for e := s + minLength - 1; e < len(seq); e++ {
-			g := windowEnergy(m, p, s, e)
-			lse.add(-g / rt)
-			rec := StructureRecord{Start: s, End: e, Energy: g}
-			if numStructures == 0 || compareStructures(rec, mfe) < 0 {
-				mfe = rec
+	acc := newEnsembleAccum()
+	if workers <= 1 {
+		for s := 0; s < n; s++ {
+			for e := s + minLength - 1; e < n; e++ {
+				acc.addWindow(s, e, windowEnergy(m, p, s, e), rt)
 			}
-			numStructures++
+		}
+	} else {
+		results := make([]ensembleAccum, workers)
+		var wg sync.WaitGroup
+		for c := 0; c < workers; c++ {
+			wg.Add(1)
+			go func(c int) {
+				defer wg.Done()
+				chunk := newEnsembleAccum()
+				for s := c; s < n; s += workers {
+					for e := s + minLength - 1; e < n; e++ {
+						chunk.addWindow(s, e, windowEnergy(m, p, s, e), rt)
+					}
+				}
+				results[c] = chunk
+			}(c)
+		}
+		wg.Wait()
+		for _, r := range results {
+			acc.merge(r)
 		}
 	}
 
 	logGround := -m.GroundStateEnergy() / rt
-	lse.add(logGround)
-	logZ := lse.value()
+	acc.lse.add(logGround)
+	logZ := acc.lse.value()
 
-	if numStructures > 0 {
-		mfe.Prob = math.Exp(-mfe.Energy/rt - logZ)
+	if acc.count > 0 {
+		acc.mfe.Prob = math.Exp(-acc.mfe.Energy/rt - logZ)
 	}
 
 	return EnsembleResult{
 		LogZ:          logZ,
 		LogGround:     logGround,
 		PGround:       math.Exp(logGround - logZ),
-		MFE:           mfe,
-		NumStructures: numStructures,
+		MFE:           acc.mfe,
+		NumStructures: acc.count,
 	}
 }
 
