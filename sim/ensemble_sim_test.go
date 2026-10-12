@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -112,7 +113,7 @@ func parsePGroundState(t *testing.T, text string) float64 {
 func runEnsembleCase(t *testing.T, cfg *config.Config) (dir string, stdout string) {
 	t.Helper()
 	var buf bytes.Buffer
-	if err := RunEnsembleSim(cfg, 2, &buf); err != nil {
+	if err := RunEnsembleSim(cfg, runtime.NumCPU(), &buf); err != nil {
 		t.Fatalf("RunEnsembleSim: %v", err)
 	}
 	return filepath.Dir(cfg.OutfileName), buf.String()

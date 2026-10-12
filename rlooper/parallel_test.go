@@ -1,6 +1,7 @@
 package rlooper
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"os"
@@ -110,6 +111,17 @@ func TestParallelDeterministic(t *testing.T) {
 	if !slices.Equal(s1.MFE, s2.MFE) {
 		t.Fatalf("MFE signal not deterministic")
 	}
+}
+
+func TestParallelMFETieBreakMatchesSerial(t *testing.T) {
+	m := NewDefaultModel()
+	m.Homopolymer, m.OverrideEnergy = true, 0.5
+	seq := bytes.Repeat([]byte("A"), 150)
+
+	serial := ComputeEnsemble(seq, m, 2, 1)
+	parallel := ComputeEnsemble(seq, m, 2, 8)
+
+	assertEnsembleEquivalent(t, parallel, serial)
 }
 
 func loadPfc53ForBench(b *testing.B) *Gene {
