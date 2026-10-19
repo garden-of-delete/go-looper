@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"golooper/sim"
@@ -15,14 +14,12 @@ var ensembleCmd = &cobra.Command{
 	Long: `Run the full ensemble simulation on nucleic acid sequences to compute
 R-loop formation energetics and signals, writing wig/bed tracks and optional
 dump, top-structure and residual reports.`,
+	SilenceUsage: true,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return requireInputOutput()
 	},
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := sim.RunEnsembleSim(&cfg, threads, os.Stdout); err != nil {
-			fmt.Printf("Error running simulation: %v\n", err)
-			os.Exit(1)
-		}
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return sim.RunEnsembleSim(&cfg, threads, os.Stdout)
 	},
 }
 

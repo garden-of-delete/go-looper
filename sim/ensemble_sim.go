@@ -82,7 +82,7 @@ func paramsFromConfig(cfg *config.Config, threads int) ensembleParams {
 	}
 }
 
-func RunEnsembleSim(cfg *config.Config, threads int, stdout io.Writer) error {
+func RunEnsembleSim(cfg *config.Config, threads int, stdout io.Writer) (err error) {
 	infile, err := os.Open(cfg.InfileName)
 	if err != nil {
 		return fmt.Errorf("error opening input file: %v", err)
@@ -93,17 +93,24 @@ func RunEnsembleSim(cfg *config.Config, threads int, stdout io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("error reading genes: %v", err)
 	}
+	if len(genes) == 0 {
+		return fmt.Errorf("no genes found in input file")
+	}
 
 	outFiles, err := CreateOutputFiles(cfg)
 	if err != nil {
 		return fmt.Errorf("error creating output files: %v", err)
 	}
-	defer outFiles.Close()
+	defer func() {
+		if closeErr := outFiles.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
 	p := paramsFromConfig(cfg, threads)
 
 	for _, g := range genes {
-		if err := processGene(stdout, outFiles, g, cfg, p); err != nil {
+		if err = processGene(stdout, outFiles, g, cfg, p); err != nil {
 			return err
 		}
 	}
@@ -111,8 +118,19 @@ func RunEnsembleSim(cfg *config.Config, threads int, stdout io.Writer) error {
 	return nil
 }
 
+func warnGeneAnomalies(stderr io.Writer, g *rlooper.Gene) {
+	if g.Loc.Strand != "+" && g.Loc.Strand != "-" {
+		fmt.Fprintf(stderr, "warning: gene %s has missing/unknown strand %q; orientation is skipped\n", g.Name, g.Loc.Strand)
+	}
+	if rangeLen := g.Loc.End - g.Loc.Start + 1; rangeLen != int64(len(g.Sequence)) {
+		fmt.Fprintf(stderr, "warning: gene %s header range length %d does not match sequence length %d\n", g.Name, rangeLen, len(g.Sequence))
+	}
+}
+
 func processGene(stdout io.Writer, outFiles *FileOps, g *rlooper.Gene, cfg *config.Config, p ensembleParams) error {
 	fmt.Fprintf(stdout, "processing gene: %s...", g.Name)
+
+	warnGeneAnomalies(os.Stderr, g)
 
 	if cfg.AutoDomainSize {
 		p.model.SetN(float64(len(g.Sequence)))
@@ -164,18 +182,18 @@ func processGene(stdout io.Writer, outFiles *FileOps, g *rlooper.Gene, cfg *conf
 		}
 	}
 
-	var recs []rlooper.StructureRecord
-	if p.top > 0 || cfg.Dump {
-		recs = rlooper.AllStructures(g.Sequence, p.model, p.minLength, ens)
-	}
-
 	if p.top > 0 {
-		if err := PrintTop(stdout, g, p.model, recs, p.top, cfg.Residuals); err != nil {
+		top := rlooper.TopStructures(g.Sequence, p.model, p.minLength, ens, p.top)
+		if err := PrintTop(stdout, g, p.model, top, p.top, cfg.Residuals); err != nil {
 			return err
 		}
 	}
 
 	if cfg.Dump {
+		if g.Loc.Strand != "+" && g.Loc.Strand != "-" {
+			return fmt.Errorf("dump error: strand unspecified")
+		}
+		recs := rlooper.AllStructures(g.Sequence, p.model, p.minLength, ens)
 		if err := dumpGene(stdout, cfg, g, p.model, recs); err != nil {
 			return err
 		}
@@ -185,10 +203,11 @@ func processGene(stdout io.Writer, outFiles *FileOps, g *rlooper.Gene, cfg *conf
 }
 
 func dumpGene(stdout io.Writer, cfg *config.Config, g *rlooper.Gene, m *rlooper.EnergyModel, recs []rlooper.StructureRecord) error {
-	dumpFile, err := createFileWithDir(cfg.OutfileName + g.Name + "_dump.txt")
+	f, err := createFileWithDir(cfg.OutfileName + g.Name + "_dump.txt")
 	if err != nil {
 		return fmt.Errorf("error creating dump file: %v", err)
 	}
+	dumpFile := newBufferedFile(f)
 	if err := WriteDump(dumpFile, g, m.GroundStateEnergy(), recs); err != nil {
 		dumpFile.Close()
 		return err

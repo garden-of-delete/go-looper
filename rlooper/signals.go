@@ -14,49 +14,46 @@ type Residuals struct {
 }
 
 type signalAccum struct {
-	bpDiff, numDiff, denDiff []float64
+	bp, num []float64
 }
 
 func newSignalAccum(n int, withAvgG bool) signalAccum {
-	acc := signalAccum{bpDiff: make([]float64, n+1)}
+	acc := signalAccum{bp: make([]float64, n)}
 	if withAvgG {
-		acc.numDiff = make([]float64, n+1)
-		acc.denDiff = make([]float64, n+1)
+		acc.num = make([]float64, n)
 	}
 	return acc
 }
 
-func (a *signalAccum) addWindow(s, e int, g, prob float64, withAvgG bool) {
-	a.bpDiff[s] += prob
-	a.bpDiff[e] -= prob
-	if withAvgG {
-		a.numDiff[s] += prob * g
-		a.numDiff[e] -= prob * g
-		a.denDiff[s] += prob
-		a.denDiff[e] -= prob
+func (a *signalAccum) addRow(m *EnergyModel, p []float64, s, minLength int, rt, logZ float64) {
+	n := len(a.bp)
+	first := s + minLength - 1
+	var sumProb, sumProbG float64
+	for e := n - 1; e > s; e-- {
+		if e >= first {
+			g := windowEnergy(m, p, s, e)
+			prob := math.Exp(-g/rt - logZ)
+			sumProb += prob
+			sumProbG += prob * g
+		}
+		a.bp[e-1] += sumProb
+		if a.num != nil {
+			a.num[e-1] += sumProbG
+		}
 	}
 }
 
 func (a *signalAccum) merge(o signalAccum) {
-	for i := range a.bpDiff {
-		a.bpDiff[i] += o.bpDiff[i]
+	for i := range a.bp {
+		a.bp[i] += o.bp[i]
 	}
-	if a.numDiff == nil {
-		return
-	}
-	for i := range a.numDiff {
-		a.numDiff[i] += o.numDiff[i]
-		a.denDiff[i] += o.denDiff[i]
+	for i := range a.num {
+		a.num[i] += o.num[i]
 	}
 }
 
 func ComputeSignals(seq []byte, m *EnergyModel, minLength int, ens EnsembleResult, withAvgG bool, workers int) Signals {
 	n := len(seq)
-	sig := Signals{BPProb: make([]float64, n), MFE: make([]float64, n)}
-	if withAvgG {
-		sig.AvgG = make([]float64, n)
-	}
-
 	p := PrefixBPEnergies(seq, m)
 	rt := m.RT()
 	workers = clampWorkers(workers, n)
@@ -64,11 +61,7 @@ func ComputeSignals(seq []byte, m *EnergyModel, minLength int, ens EnsembleResul
 	acc := newSignalAccum(n, withAvgG)
 	if workers <= 1 {
 		for s := 0; s < n; s++ {
-			for e := s + minLength - 1; e < n; e++ {
-				g := windowEnergy(m, p, s, e)
-				prob := math.Exp(-g/rt - ens.LogZ)
-				acc.addWindow(s, e, g, prob, withAvgG)
-			}
+			acc.addRow(m, p, s, minLength, rt, ens.LogZ)
 		}
 	} else {
 		results := make([]signalAccum, workers)
@@ -79,11 +72,7 @@ func ComputeSignals(seq []byte, m *EnergyModel, minLength int, ens EnsembleResul
 				defer wg.Done()
 				chunk := newSignalAccum(n, withAvgG)
 				for s := c; s < n; s += workers {
-					for e := s + minLength - 1; e < n; e++ {
-						g := windowEnergy(m, p, s, e)
-						prob := math.Exp(-g/rt - ens.LogZ)
-						chunk.addWindow(s, e, g, prob, withAvgG)
-					}
+					chunk.addRow(m, p, s, minLength, rt, ens.LogZ)
 				}
 				results[c] = chunk
 			}(c)
@@ -94,15 +83,12 @@ func ComputeSignals(seq []byte, m *EnergyModel, minLength int, ens EnsembleResul
 		}
 	}
 
-	var bpAcc, numAcc, denAcc float64
-	for i := 0; i < n; i++ {
-		bpAcc += acc.bpDiff[i]
-		sig.BPProb[i] = bpAcc
-		if withAvgG {
-			numAcc += acc.numDiff[i]
-			denAcc += acc.denDiff[i]
-			if denAcc > 0 {
-				sig.AvgG[i] = numAcc / denAcc
+	sig := Signals{BPProb: acc.bp, MFE: make([]float64, n)}
+	if withAvgG {
+		sig.AvgG = make([]float64, n)
+		for i, den := range acc.bp {
+			if den > 0 {
+				sig.AvgG[i] = acc.num[i] / den
 			}
 		}
 	}

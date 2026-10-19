@@ -11,10 +11,8 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// cfg holds the global configuration
 var cfg config.Config
 
-// temporary variables to hold flag values
 var nucleationFreeEnergy float64
 var superhelicityDomain string
 var superhelicalDensity float64
@@ -34,27 +32,36 @@ var rootCmd = &cobra.Command{
 	Short: "golooper is a CLI application for running biophysical simulations on nucleic acid energetics.",
 	Long: `Go Looper is a CLI application that provides various commands
 for running biophysical simulations on nucleic acid energetics with an emphasis on R-loops (genomic DNA/RNA hybrids).`,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		cfg.InfileName = infilename
 		cfg.OutfileName = outfilename
 
-		// Set the pointers in the config only if the flags are set
+		var flagErr error
 		cmd.Flags().Visit(func(f *pflag.Flag) {
+			if flagErr != nil {
+				return
+			}
 			switch f.Name {
 			case "a":
 				cfg.NucleationFreeEnergy = &nucleationFreeEnergy
 			case "N":
-				if superhelicityDomain == "auto" {
+				auto, value, err := parseSuperhelicityDomain(superhelicityDomain)
+				if err != nil {
+					flagErr = err
+					return
+				}
+				if auto {
 					cfg.AutoDomainSize = true
 				} else {
-					value, err := strconv.Atoi(superhelicityDomain)
-					if err == nil {
-						cfg.SuperhelicityDomain = &value
-					}
+					cfg.SuperhelicityDomain = &value
 				}
 			case "sigma":
 				cfg.SuperhelicalDensity = &superhelicalDensity
 			case "minlength":
+				if err := validateMinLength(minRLoopLength); err != nil {
+					flagErr = err
+					return
+				}
 				cfg.MinRLoopLength = &minRLoopLength
 			case "reverse":
 				cfg.Reverse = &reverse
@@ -70,7 +77,37 @@ for running biophysical simulations on nucleic acid energetics with an emphasis 
 				cfg.Top = &top
 			}
 		})
+		if flagErr != nil {
+			return flagErr
+		}
+
+		return validateCircular(cfg.Circular)
 	},
+}
+
+func parseSuperhelicityDomain(s string) (auto bool, value int, err error) {
+	if s == "auto" {
+		return true, 0, nil
+	}
+	n, convErr := strconv.Atoi(s)
+	if convErr != nil || n <= 0 {
+		return false, 0, fmt.Errorf("--N must be a positive integer or \"auto\", got %q", s)
+	}
+	return false, n, nil
+}
+
+func validateMinLength(n int) error {
+	if n < 2 {
+		return fmt.Errorf("--minlength must be at least 2, got %d", n)
+	}
+	return nil
+}
+
+func validateCircular(circular bool) error {
+	if circular {
+		return fmt.Errorf("circular mode is not implemented; sequences are treated as linear")
+	}
+	return nil
 }
 
 func requireInputOutput() error {
@@ -83,12 +120,10 @@ func requireInputOutput() error {
 	return nil
 }
 
-// GetConfig returns the current configuration
 func GetConfig() config.Config {
 	return cfg
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
 func Execute() error {
 	return rootCmd.Execute()
 }

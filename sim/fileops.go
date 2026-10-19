@@ -1,8 +1,10 @@
 package sim
 
 import (
+	"bufio"
 	"fmt"
 	"golooper/config"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -15,38 +17,59 @@ func createFileWithDir(path string) (*os.File, error) {
 	return os.Create(path)
 }
 
-func createOutputFile(path string, headerFunc func(*os.File) error, headerName string) (*os.File, error) {
+type bufferedFile struct {
+	*bufio.Writer
+	f *os.File
+}
+
+func newBufferedFile(f *os.File) *bufferedFile {
+	return &bufferedFile{Writer: bufio.NewWriter(f), f: f}
+}
+
+func (b *bufferedFile) Close() error {
+	if err := b.Flush(); err != nil {
+		b.f.Close()
+		return fmt.Errorf("error flushing %s: %v", b.f.Name(), err)
+	}
+	if err := b.f.Close(); err != nil {
+		return fmt.Errorf("error closing %s: %v", b.f.Name(), err)
+	}
+	return nil
+}
+
+func createOutputFile(path string, headerFunc func(io.Writer) error, headerName string) (*bufferedFile, error) {
 	file, err := createFileWithDir(path)
 	if err != nil {
 		return nil, fmt.Errorf("error creating %s file at %s: %v", headerName, path, err)
 	}
-	if err := headerFunc(file); err != nil {
-		file.Close()
+	buffered := newBufferedFile(file)
+	if err := headerFunc(buffered); err != nil {
+		buffered.Close()
 		return nil, fmt.Errorf("error writing %s header: %v", headerName, err)
 	}
-	return file, nil
+	return buffered, nil
 }
 
 type FileOps struct {
-	BasePairProbWig         *os.File
-	AverageEnergyWig        *os.File
-	MinFreeEnergyWig        *os.File
-	BasePairProbBed         *os.File
-	MinFreeEnergyBed        *os.File
-	ExtendedBasePairProbWig *os.File
+	BasePairProbWig         *bufferedFile
+	AverageEnergyWig        *bufferedFile
+	MinFreeEnergyWig        *bufferedFile
+	BasePairProbBed         *bufferedFile
+	MinFreeEnergyBed        *bufferedFile
+	ExtendedBasePairProbWig *bufferedFile
 }
 
-func writeWigfileHeader(outfile *os.File, trackname string) error {
+func writeWigfileHeader(w io.Writer, trackname string) error {
 	header := fmt.Sprintf("track type=wiggle_0 name=\"%s\" visibility=full autoscale=off color=50,150,255 priority=10\n", trackname)
-	if _, err := outfile.WriteString(header); err != nil {
+	if _, err := io.WriteString(w, header); err != nil {
 		return fmt.Errorf("error writing wig header: %v", err)
 	}
 	return nil
 }
 
-func writeBedfileHeader(outfile *os.File, trackname string) error {
+func writeBedfileHeader(w io.Writer, trackname string) error {
 	header := fmt.Sprintf("track name=rLooper description=\"%s\" useScore=1\n", trackname)
-	if _, err := outfile.WriteString(header); err != nil {
+	if _, err := io.WriteString(w, header); err != nil {
 		return fmt.Errorf("error writing bed header: %v", err)
 	}
 	return nil
@@ -105,7 +128,7 @@ func CreateOutputFiles(config *config.Config) (*FileOps, error) {
 
 	fileOps.BasePairProbWig, err = createOutputFile(
 		basePath+"_bpprob.wig",
-		func(f *os.File) error { return writeWigfileHeader(f, "signal1_"+base) },
+		func(w io.Writer) error { return writeWigfileHeader(w, "signal1_"+base) },
 		"base pair probability wig",
 	)
 	if err != nil {
@@ -115,7 +138,7 @@ func CreateOutputFiles(config *config.Config) (*FileOps, error) {
 
 	fileOps.AverageEnergyWig, err = createOutputFile(
 		basePath+"_avgG.wig",
-		func(f *os.File) error { return writeWigfileHeader(f, "signal2_"+base) },
+		func(w io.Writer) error { return writeWigfileHeader(w, "signal2_"+base) },
 		"average energy wig",
 	)
 	if err != nil {
@@ -125,7 +148,7 @@ func CreateOutputFiles(config *config.Config) (*FileOps, error) {
 
 	fileOps.MinFreeEnergyWig, err = createOutputFile(
 		basePath+"_mfe.wig",
-		func(f *os.File) error { return writeWigfileHeader(f, "signal3_"+base) },
+		func(w io.Writer) error { return writeWigfileHeader(w, "signal3_"+base) },
 		"minimum free energy wig",
 	)
 	if err != nil {
@@ -135,7 +158,7 @@ func CreateOutputFiles(config *config.Config) (*FileOps, error) {
 
 	fileOps.BasePairProbBed, err = createOutputFile(
 		basePath+"_bpprob.bed",
-		func(f *os.File) error { return writeBedfileHeader(f, "signal1_peaks_"+base) },
+		func(w io.Writer) error { return writeBedfileHeader(w, "signal1_peaks_"+base) },
 		"base pair probability bed",
 	)
 	if err != nil {
@@ -145,7 +168,7 @@ func CreateOutputFiles(config *config.Config) (*FileOps, error) {
 
 	fileOps.MinFreeEnergyBed, err = createOutputFile(
 		basePath+"_mfe.bed",
-		func(f *os.File) error { return writeBedfileHeader(f, "signal3_peaks_"+base) },
+		func(w io.Writer) error { return writeBedfileHeader(w, "signal3_peaks_"+base) },
 		"minimum free energy bed",
 	)
 	if err != nil {
@@ -155,7 +178,7 @@ func CreateOutputFiles(config *config.Config) (*FileOps, error) {
 
 	fileOps.ExtendedBasePairProbWig, err = createOutputFile(
 		basePath+"_extbpprob.wig",
-		func(f *os.File) error { return writeWigfileHeader(f, "signal4_"+base) },
+		func(w io.Writer) error { return writeWigfileHeader(w, "signal4_"+base) },
 		"extended base pair probability wig",
 	)
 	if err != nil {

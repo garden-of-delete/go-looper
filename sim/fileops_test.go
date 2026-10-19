@@ -10,6 +10,45 @@ import (
 	"testing"
 )
 
+func TestBufferedFileFlushesOnClose(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "out.txt")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bf := newBufferedFile(f)
+	if _, err := bf.WriteString("hello"); err != nil {
+		t.Fatal(err)
+	}
+	if err := bf.Close(); err != nil {
+		t.Fatalf("Close() = %v, want nil", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "hello" {
+		t.Fatalf("file contents = %q, want %q", string(data), "hello")
+	}
+}
+
+func TestBufferedFileCloseReportsFlushError(t *testing.T) {
+	f, err := os.Create(filepath.Join(t.TempDir(), "out.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bf := newBufferedFile(f)
+	if _, err := bf.WriteString("buffered but not yet flushed"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := bf.Close(); err == nil {
+		t.Fatal("Close() = nil, want error after underlying file was already closed")
+	}
+}
+
 func TestFileOps(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "golooper_test_*")
 	if err != nil {
@@ -66,15 +105,19 @@ func TestFileOps(t *testing.T) {
 	}
 }
 
-func checkWigHeader(t *testing.T, file *os.File, expectedName string) {
+func checkWigHeader(t *testing.T, file *bufferedFile, expectedName string) {
 	t.Helper()
 
-	if _, err := file.Seek(0, 0); err != nil {
+	if err := file.Flush(); err != nil {
+		t.Errorf("Failed to flush file: %v", err)
+		return
+	}
+	if _, err := file.f.Seek(0, 0); err != nil {
 		t.Errorf("Failed to seek to beginning of file: %v", err)
 		return
 	}
 
-	reader := bufio.NewReader(file)
+	reader := bufio.NewReader(file.f)
 	header, err := reader.ReadString('\n')
 	if err != nil {
 		t.Errorf("Failed to read wig header: %v", err)
@@ -87,15 +130,19 @@ func checkWigHeader(t *testing.T, file *os.File, expectedName string) {
 	}
 }
 
-func checkBedHeader(t *testing.T, file *os.File, expectedName string) {
+func checkBedHeader(t *testing.T, file *bufferedFile, expectedName string) {
 	t.Helper()
 
-	if _, err := file.Seek(0, 0); err != nil {
+	if err := file.Flush(); err != nil {
+		t.Errorf("Failed to flush file: %v", err)
+		return
+	}
+	if _, err := file.f.Seek(0, 0); err != nil {
 		t.Errorf("Failed to seek to beginning of file: %v", err)
 		return
 	}
 
-	reader := bufio.NewReader(file)
+	reader := bufio.NewReader(file.f)
 	header, err := reader.ReadString('\n')
 	if err != nil {
 		t.Errorf("Failed to read bed header: %v", err)

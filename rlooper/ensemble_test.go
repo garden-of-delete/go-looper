@@ -157,6 +157,26 @@ func TestLogSumExpMergeNonEmptyWithEmptyUnchanged(t *testing.T) {
 	}
 }
 
+func TestTopStructuresMatchesAllStructures(t *testing.T) {
+	genes := readFixture(t, "../testdata/fixtures/synthetic200.fa")
+	g := genes[0]
+	g.ApplyOrientation(false, false, false)
+	m := NewDefaultModel()
+	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
+
+	all := AllStructures(g.Sequence, m, 2, ens)
+	top := TopStructures(g.Sequence, m, 2, ens, 5)
+
+	if len(top) != 5 {
+		t.Fatalf("len(top) = %d, want 5", len(top))
+	}
+	for i := range top {
+		if top[i] != all[i] {
+			t.Fatalf("TopStructures[%d] = %+v, want AllStructures[%d] = %+v", i, top[i], i, all[i])
+		}
+	}
+}
+
 func TestEnsembleAgainstGoldenDump(t *testing.T) {
 	genes := readFixture(t, "../testdata/fixtures/synthetic200.fa")
 	g := genes[0]

@@ -96,7 +96,7 @@ run_rlooper_case defaults "$FIXTURE" --localaverageenergy --dump --residuals --t
 run_rlooper_case sigma010 "$FIXTURE" --sigma -0.10
 run_rlooper_case nauto "$FIXTURE" --N auto
 run_rlooper_case homopolymer05 "$FIXTURE" --homopolymer 0.5
-run_rlooper_case pfc53 "$PFC53"
+run_rlooper_case pfc53 "$PFC53" --localaverageenergy
 
 echo "--- running case: perloop ---"
 PERLOOP_OUTDIR="$SRC_DIR/golden/perloop"

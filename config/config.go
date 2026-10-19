@@ -1,6 +1,5 @@
 package config
 
-// Config holds the global configuration values for the application
 type Config struct {
 	NucleationFreeEnergy *float64
 	SuperhelicityDomain  *int

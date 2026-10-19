@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -110,10 +109,12 @@ func parsePGroundState(t *testing.T, text string) float64 {
 	return 0
 }
 
+const e2eWorkers = 4
+
 func runEnsembleCase(t *testing.T, cfg *config.Config) (dir string, stdout string) {
 	t.Helper()
 	var buf bytes.Buffer
-	if err := RunEnsembleSim(cfg, runtime.NumCPU(), &buf); err != nil {
+	if err := RunEnsembleSim(cfg, e2eWorkers, &buf); err != nil {
 		t.Fatalf("RunEnsembleSim: %v", err)
 	}
 	return filepath.Dir(cfg.OutfileName), buf.String()
@@ -248,11 +249,57 @@ func TestRunEnsembleSimAgainstGoldenSigma010(t *testing.T) {
 	compareMFEWig(t, ens, readWigValues(t, filepath.Join(dir, "out_mfe.wig")), filepath.Join(goldenDir, "out_mfe.wig"))
 }
 
+func TestRunEnsembleSimAgainstGoldenNauto(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{
+		InfileName:     "../testdata/fixtures/synthetic200.fa",
+		OutfileName:    filepath.Join(dir, "out"),
+		AutoDomainSize: true,
+	}
+
+	_, stdout := runEnsembleCase(t, cfg)
+	goldenDir := "../testdata/golden/nauto"
+
+	goldenStdout, err := os.ReadFile(filepath.Join(goldenDir, "stdout.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkTol(t, parsePGroundState(t, stdout), parsePGroundState(t, string(goldenStdout)))
+
+	ens := loadEnsembleForTie(t, cfg)
+	compareWig(t, readWigValues(t, filepath.Join(dir, "out_bpprob.wig")), filepath.Join(goldenDir, "out_bpprob.wig"))
+	compareMFEWig(t, ens, readWigValues(t, filepath.Join(dir, "out_mfe.wig")), filepath.Join(goldenDir, "out_mfe.wig"))
+}
+
+func TestRunEnsembleSimAgainstGoldenHomopolymer05(t *testing.T) {
+	dir := t.TempDir()
+	homopolymer := 0.5
+	cfg := &config.Config{
+		InfileName:  "../testdata/fixtures/synthetic200.fa",
+		OutfileName: filepath.Join(dir, "out"),
+		Homopolymer: &homopolymer,
+	}
+
+	_, stdout := runEnsembleCase(t, cfg)
+	goldenDir := "../testdata/golden/homopolymer05"
+
+	goldenStdout, err := os.ReadFile(filepath.Join(goldenDir, "stdout.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkTol(t, parsePGroundState(t, stdout), parsePGroundState(t, string(goldenStdout)))
+
+	ens := loadEnsembleForTie(t, cfg)
+	compareWig(t, readWigValues(t, filepath.Join(dir, "out_bpprob.wig")), filepath.Join(goldenDir, "out_bpprob.wig"))
+	compareMFEWig(t, ens, readWigValues(t, filepath.Join(dir, "out_mfe.wig")), filepath.Join(goldenDir, "out_mfe.wig"))
+}
+
 func TestRunEnsembleSimAgainstGoldenPfc53(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{
-		InfileName:  "../res/pfc53_full.fa",
-		OutfileName: filepath.Join(dir, "out"),
+		InfileName:         "../res/pfc53_full.fa",
+		OutfileName:        filepath.Join(dir, "out"),
+		LocalAverageEnergy: true,
 	}
 
 	runEnsembleCase(t, cfg)
@@ -260,7 +307,113 @@ func TestRunEnsembleSimAgainstGoldenPfc53(t *testing.T) {
 
 	ens := loadEnsembleForTie(t, cfg)
 	compareWig(t, readWigValues(t, filepath.Join(dir, "out_bpprob.wig")), filepath.Join(goldenDir, "out_bpprob.wig"))
+	compareWig(t, readWigValues(t, filepath.Join(dir, "out_avgG.wig")), filepath.Join(goldenDir, "out_avgG.wig"))
 	compareMFEWig(t, ens, readWigValues(t, filepath.Join(dir, "out_mfe.wig")), filepath.Join(goldenDir, "out_mfe.wig"))
+}
+
+func TestModelFromConfigFlags(t *testing.T) {
+	nucleation := 12.5
+	unconstrained := true
+	cfg := &config.Config{
+		NucleationFreeEnergy: &nucleation,
+		Unconstrained:        &unconstrained,
+	}
+
+	m := ModelFromConfig(cfg)
+	if m.Nucleation != nucleation {
+		t.Errorf("Nucleation = %g, want %g", m.Nucleation, nucleation)
+	}
+	if !m.Unconstrained {
+		t.Error("Unconstrained = false, want true")
+	}
+
+	minLength := 3
+	cfg = &config.Config{MinRLoopLength: &minLength}
+	if got := minLengthFromConfig(cfg); got != minLength {
+		t.Errorf("minLengthFromConfig = %d, want %d", got, minLength)
+	}
+}
+
+func TestWarnGeneAnomalies(t *testing.T) {
+	var buf bytes.Buffer
+	unknownStrand := &rlooper.Gene{
+		Name:     "G1",
+		Loc:      rlooper.Loci{Strand: "?", Start: 1, End: 10},
+		Sequence: make([]byte, 10),
+	}
+	warnGeneAnomalies(&buf, unknownStrand)
+	if !strings.Contains(buf.String(), "missing/unknown strand") {
+		t.Fatalf("expected strand warning, got %q", buf.String())
+	}
+
+	buf.Reset()
+	mismatchedRange := &rlooper.Gene{
+		Name:     "G2",
+		Loc:      rlooper.Loci{Strand: "+", Start: 1, End: 3908},
+		Sequence: make([]byte, 3906),
+	}
+	warnGeneAnomalies(&buf, mismatchedRange)
+	msg := buf.String()
+	if !strings.Contains(msg, "3908") || !strings.Contains(msg, "3906") {
+		t.Fatalf("expected range-length warning naming both numbers, got %q", msg)
+	}
+
+	buf.Reset()
+	wellFormed := &rlooper.Gene{
+		Name:     "G3",
+		Loc:      rlooper.Loci{Strand: "+", Start: 1, End: 10},
+		Sequence: make([]byte, 10),
+	}
+	warnGeneAnomalies(&buf, wellFormed)
+	if buf.Len() != 0 {
+		t.Fatalf("expected no warnings for well-formed gene, got %q", buf.String())
+	}
+}
+
+func TestProcessGeneDumpValidatesStrandBeforeCreatingFile(t *testing.T) {
+	dir := t.TempDir()
+	g := &rlooper.Gene{
+		Name:     "NOSTRAND",
+		Loc:      rlooper.Loci{Chromosome: "chrT", Strand: "", Start: 1, End: 10},
+		Sequence: []byte("ACGTACGTAC"),
+	}
+	cfg := &config.Config{
+		OutfileName: filepath.Join(dir, "out"),
+		Dump:        true,
+	}
+	outFiles, err := CreateOutputFiles(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer outFiles.Close()
+
+	p := paramsFromConfig(cfg, 1)
+	var stdout bytes.Buffer
+	err = processGene(&stdout, outFiles, g, cfg, p)
+	if err == nil || !strings.Contains(err.Error(), "strand unspecified") {
+		t.Fatalf("processGene error = %v, want strand unspecified error", err)
+	}
+
+	dumpPath := cfg.OutfileName + g.Name + "_dump.txt"
+	if _, statErr := os.Stat(dumpPath); !os.IsNotExist(statErr) {
+		t.Fatalf("dump file %s should not have been created (statErr = %v)", dumpPath, statErr)
+	}
+}
+
+func TestRunEnsembleSimZeroGenes(t *testing.T) {
+	dir := t.TempDir()
+	emptyFasta := filepath.Join(dir, "empty.fa")
+	if err := os.WriteFile(emptyFasta, []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{
+		InfileName:  emptyFasta,
+		OutfileName: filepath.Join(dir, "out"),
+	}
+	var buf bytes.Buffer
+	if err := RunEnsembleSim(cfg, 1, &buf); err == nil || !strings.Contains(err.Error(), "no genes found") {
+		t.Fatalf("RunEnsembleSim error = %v, want 'no genes found'", err)
+	}
 }
 
 type ensembleTieInfo struct {
@@ -289,7 +442,7 @@ func loadEnsembleForTie(t *testing.T, cfg *config.Config) ensembleTieInfo {
 	reverse := cfg.Reverse != nil && *cfg.Reverse
 	g.ApplyOrientation(complement, reverse, cfg.Invert)
 	minLength := minLengthFromConfig(cfg)
-	ens := rlooper.ComputeEnsemble(g.Sequence, m, minLength, 1)
+	ens := rlooper.ComputeEnsemble(g.Sequence, m, minLength, e2eWorkers)
 	recs := rlooper.AllStructures(g.Sequence, m, minLength, ens)
 	return ensembleTieInfo{gene: g, recs: recs, mfeEnergy: ens.MFE.Energy}
 }

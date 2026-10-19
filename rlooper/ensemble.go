@@ -180,3 +180,35 @@ func AllStructures(seq []byte, m *EnergyModel, minLength int, ens EnsembleResult
 
 	return recs
 }
+
+func TopStructures(seq []byte, m *EnergyModel, minLength int, ens EnsembleResult, n int) []StructureRecord {
+	if n <= 0 {
+		return nil
+	}
+	p := PrefixBPEnergies(seq, m)
+	rt := m.RT()
+	top := make([]StructureRecord, 0, n)
+
+	for s := 0; s < len(seq); s++ {
+		for e := s + minLength - 1; e < len(seq); e++ {
+			g := windowEnergy(m, p, s, e)
+			r := StructureRecord{Start: s, End: e, Energy: g, Prob: math.Exp(-g/rt - ens.LogZ)}
+			if len(top) == n && compareStructures(r, top[n-1]) >= 0 {
+				continue
+			}
+			i := len(top)
+			if i == n {
+				i--
+			} else {
+				top = append(top, StructureRecord{})
+			}
+			for i > 0 && compareStructures(top[i-1], r) > 0 {
+				top[i] = top[i-1]
+				i--
+			}
+			top[i] = r
+		}
+	}
+
+	return top
+}

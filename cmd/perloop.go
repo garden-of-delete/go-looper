@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"golooper/sim"
 
@@ -19,15 +18,26 @@ var perloopCmd = &cobra.Command{
 	Long: `Run perloop analysis on nucleic acid sequences to analyze R-loop formation
 and energetics. This command takes an input file containing sequence data and
 generates output at the specified path.`,
+	SilenceUsage: true,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		return requireInputOutput()
-	},
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := sim.RunPerloop(&cfg, sigmaMin, sigmaMax, sigmaStep, threads); err != nil {
-			fmt.Printf("Error running simulation: %v\n", err)
-			os.Exit(1)
+		if err := requireInputOutput(); err != nil {
+			return err
 		}
+		return validateSigmaRange(sigmaMin, sigmaMax, sigmaStep)
 	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return sim.RunPerloop(&cfg, sigmaMin, sigmaMax, sigmaStep, threads)
+	},
+}
+
+func validateSigmaRange(min, max, step float64) error {
+	if step <= 0 {
+		return fmt.Errorf("--sigma-step must be > 0, got %g", step)
+	}
+	if min > max {
+		return fmt.Errorf("--sigma-min (%g) must be <= --sigma-max (%g)", min, max)
+	}
+	return nil
 }
 
 func init() {

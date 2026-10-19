@@ -164,6 +164,34 @@ func TestSignalsAgainstNaiveDirectSum(t *testing.T) {
 	}
 }
 
+func loadPfc53Fixture(t *testing.T) *Gene {
+	t.Helper()
+	genes := readFixture(t, "../res/pfc53_full.fa")
+	g := genes[0]
+	g.ApplyOrientation(false, false, false)
+	return g
+}
+
+func TestSignalsPfc53NoNegativeBPProb(t *testing.T) {
+	g := loadPfc53Fixture(t)
+	m := NewDefaultModel()
+	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
+	sig := ComputeSignals(g.Sequence, m, 2, ens, true, 1)
+
+	n := len(sig.BPProb)
+	if sig.BPProb[n-1] != 0 {
+		t.Fatalf("BPProb[%d] (final base) = %g, want exactly 0", n-1, sig.BPProb[n-1])
+	}
+	for i, v := range sig.BPProb {
+		if v < 0 {
+			t.Fatalf("BPProb[%d] = %g, want >= 0", i, v)
+		}
+	}
+	if sig.AvgG[n-1] != 0 {
+		t.Fatalf("AvgG[%d] (final base, uncovered) = %g, want exactly 0", n-1, sig.AvgG[n-1])
+	}
+}
+
 func TestSignalsZeroStructures(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("ACGT")

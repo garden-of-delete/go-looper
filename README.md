@@ -53,10 +53,11 @@ base-pair probability, average energy, and MFE occupancy), `_bpprob.bed` and
 feature the column corresponds to). With `--dump`, an additional
 `<output_prefix><sequence name>_dump.txt` is written per sequence, listing
 every enumerated structure sorted by ascending energy with the ground state
-first. With `--top N`, the N most probable structures are printed to stdout.
-With `--residuals`, ensemble-averaged residual twist, linking difference, and
-superhelicity are printed to stdout, and `--top` output gains per-structure
-residual columns.
+first. With `--top N`, the N most probable structures are printed to stdout;
+its residual columns (twist, linking difference, superhelicity) print as
+zeros unless `--residuals` is also passed. With `--residuals`,
+ensemble-averaged residual twist, linking difference, and superhelicity are
+also printed to stdout.
 
 ### perloop
 
@@ -69,7 +70,11 @@ golooper perloop -f <input.fa> -o <output_prefix> --sigma-min <lo> --sigma-max <
 
 `--sigma-min` and `--sigma-max` are required; `--sigma-step` defaults to
 `0.01`. Writes `<output_prefix>_perloop.txt` with one row per step:
-`sigma 1-P(ground state)`.
+`sigma 1-P(ground state)`. `perloop` shares the full flag set with `ensemble`
+but only consumes the ones that affect the model (`--sigma`, `--N`, `--a`,
+`--minlength`, etc.); the ensemble-only output flags (`--dump`, `--top`,
+`--residuals`, `--bedfile`, `--localaverageenergy`) are accepted but have no
+effect on `perloop`'s output.
 
 ## Flags shared by both commands
 
@@ -93,7 +98,7 @@ golooper perloop -f <input.fa> -o <output_prefix> --sigma-min <lo> --sigma-max <
 | `--residuals` | `-R` | compute and report residual twist/linking-difference/superhelicity |
 | `--localaverageenergy` | `-l` | also compute and populate the `_avgG.wig` average-energy signal |
 | `--threads` | | number of worker goroutines for the ensemble/signal computation (default: all CPUs) |
-| `--circular` | `-C` | accepted for forward compatibility; currently ignored — sequences are always treated as linear |
+| `--circular` | `-C` | not implemented; passing it is a hard error ("circular mode is not implemented; sequences are treated as linear") |
 
 `--reverse`/`--complement`/`--invert` apply on top of an automatic orientation
 already derived from the FASTA header's `strand=` field: `+` complements the
@@ -155,11 +160,19 @@ energy `--a` is likewise folded into the ground-state energy only
 (`ground state = K·α²/2 − a`) and excluded from every other structure's
 reported energy — so the per-structure energies in `--dump` and `--top`
 output are raw supercoiling-plus-base-pairing energies, not values relative
-to the ground state. The one place this port departs from rlooper2 on
-purpose is where exact energy ties occur: rlooper2's enumeration order
-resolves them arbitrarily, while golooper's parallel merge uses a total
-order that always resolves a tie to the lowest-start window, identically
-regardless of worker count.
+to the ground state. There are three places this port departs from rlooper2
+on purpose. First, where exact energy ties occur: rlooper2's enumeration
+order resolves them arbitrarily, while golooper's parallel merge uses a
+total order that always resolves a tie to the lowest-start window,
+identically regardless of worker count. Second, `--top`'s coordinates on a
+"-"-strand gene: rlooper2 mirrors `--top` through the sequence length while
+mirroring `--dump` through the gene's genomic range, giving the two
+different coordinates for the same structure; golooper uses the genomic
+mirror for both, so `--top` and `--dump` always agree. Third, chromosome
+names are reported as given in the FASTA header; rlooper2 lowercases the
+chromosome name and then re-uppercases its last character (visible in the
+golden `pfc53` case, where `PFC53FIXED` becomes `pfc53fixeD`), which this
+port does not reproduce.
 
 ## Performance
 
