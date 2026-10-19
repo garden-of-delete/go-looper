@@ -44,7 +44,7 @@ func init() {
 	perloopCmd.Flags().Float64Var(&sigmaMin, "sigma-min", 0, "lower bound of the superhelicity sweep")
 	perloopCmd.Flags().Float64Var(&sigmaMax, "sigma-max", 0, "upper bound of the superhelicity sweep")
 	perloopCmd.Flags().Float64Var(&sigmaStep, "sigma-step", 0.01, "step size of the superhelicity sweep")
-	perloopCmd.MarkFlagRequired("sigma-min")
-	perloopCmd.MarkFlagRequired("sigma-max")
+	cobra.CheckErr(perloopCmd.MarkFlagRequired("sigma-min"))
+	cobra.CheckErr(perloopCmd.MarkFlagRequired("sigma-max"))
 	rootCmd.AddCommand(perloopCmd)
 }

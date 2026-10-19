@@ -218,7 +218,7 @@ func TestComputeResidualsAgainstGolden(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
 	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
-	res := ComputeResiduals(g.Sequence, m, 2, ens)
+	res := ComputeResiduals(g.Sequence, m, 2, ens, 1)
 	want := parseResidualsGolden(t, "../testdata/golden/defaults/stdout.txt")
 	checkTol(t, res.Twist, want["ensemble_residual_twist"])
 	checkTol(t, res.LinkingDifference, want["ensemble_residual_linking_difference"])
@@ -231,7 +231,7 @@ func TestComputeResidualsZeroStructures(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("ACGT")
 	ens := ComputeEnsemble(seq, m, 10, 1)
-	res := ComputeResiduals(seq, m, 10, ens)
+	res := ComputeResiduals(seq, m, 10, ens, 1)
 	wantTwist := m.K * m.C * m.Alpha / (2 * math.Pi)
 	if res.Twist != wantTwist {
 		t.Fatalf("Twist = %g, want %g", res.Twist, wantTwist)

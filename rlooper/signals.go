@@ -111,24 +111,68 @@ func StructureResiduals(m *EnergyModel, r StructureRecord) (twist, linkingDiffer
 	return twist, linkingDifference
 }
 
-func ComputeResiduals(seq []byte, m *EnergyModel, minLength int, ens EnsembleResult) Residuals {
+type residualAccum struct {
+	twist, linkingDifference, wrappingAbsorption, strandSeparation float64
+}
+
+func (a *residualAccum) addRow(m *EnergyModel, p []float64, s, n, minLength int, rt, logZ float64) {
+	for e := s + minLength - 1; e < n; e++ {
+		g := windowEnergy(m, p, s, e)
+		prob := math.Exp(-g/rt - logZ)
+		l := float64(e - s)
+		rtw, rld := StructureResiduals(m, StructureRecord{Start: s, End: e})
+		a.twist += rtw * prob
+		a.linkingDifference += rld * prob
+		a.wrappingAbsorption += (m.Alpha - rld + l*m.A) * prob
+		a.strandSeparation -= l * m.A * prob
+	}
+}
+
+func (a *residualAccum) merge(o residualAccum) {
+	a.twist += o.twist
+	a.linkingDifference += o.linkingDifference
+	a.wrappingAbsorption += o.wrappingAbsorption
+	a.strandSeparation += o.strandSeparation
+}
+
+func ComputeResiduals(seq []byte, m *EnergyModel, minLength int, ens EnsembleResult, workers int) Residuals {
 	var res Residuals
 
 	if ens.NumStructures > 0 {
+		n := len(seq)
 		p := PrefixBPEnergies(seq, m)
 		rt := m.RT()
-		for s := 0; s < len(seq); s++ {
-			for e := s + minLength - 1; e < len(seq); e++ {
-				g := windowEnergy(m, p, s, e)
-				prob := math.Exp(-g/rt - ens.LogZ)
-				l := float64(e - s)
-				rtw, rld := StructureResiduals(m, StructureRecord{Start: s, End: e})
-				res.Twist += rtw * prob
-				res.LinkingDifference += rld * prob
-				res.WrappingAbsorption += (m.Alpha - rld + l*m.A) * prob
-				res.StrandSeparation -= l * m.A * prob
+		workers = clampWorkers(workers, n)
+
+		var acc residualAccum
+		if workers <= 1 {
+			for s := 0; s < n; s++ {
+				acc.addRow(m, p, s, n, minLength, rt, ens.LogZ)
+			}
+		} else {
+			results := make([]residualAccum, workers)
+			var wg sync.WaitGroup
+			for c := 0; c < workers; c++ {
+				wg.Add(1)
+				go func(c int) {
+					defer wg.Done()
+					var chunk residualAccum
+					for s := c; s < n; s += workers {
+						chunk.addRow(m, p, s, n, minLength, rt, ens.LogZ)
+					}
+					results[c] = chunk
+				}(c)
+			}
+			wg.Wait()
+			for _, r := range results {
+				acc.merge(r)
 			}
 		}
+
+		res.Twist = acc.twist
+		res.LinkingDifference = acc.linkingDifference
+		res.WrappingAbsorption = acc.wrappingAbsorption
+		res.StrandSeparation = acc.strandSeparation
 	}
 
 	res.Twist += (m.K * m.C * m.Alpha / (2 * math.Pi)) * ens.PGround

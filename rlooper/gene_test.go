@@ -39,6 +39,22 @@ func TestReadGenesRejectsInvalidBase(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "N") {
 		t.Fatalf("want invalid-base error, got %v", err)
 	}
+	if !strings.Contains(err.Error(), "x") || !strings.Contains(err.Error(), "3") {
+		t.Fatalf("want record name and position in error, got %v", err)
+	}
+}
+
+func TestReadGenesRejectsInvalidBaseReportsOriginalByte(t *testing.T) {
+	_, err := ReadGenes(strings.NewReader(">x range=c:1-4 strand=+\nACnT\n"))
+	if err == nil || !strings.Contains(err.Error(), "n") {
+		t.Fatalf("want invalid-base error reporting original lowercase byte, got %v", err)
+	}
+	if strings.Contains(err.Error(), "N") {
+		t.Fatalf("want original lowercase byte, not uppercased, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "x") || !strings.Contains(err.Error(), "3") {
+		t.Fatalf("want record name and position in error, got %v", err)
+	}
 }
 
 func TestReadGenesLongLine(t *testing.T) {

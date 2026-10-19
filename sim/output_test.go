@@ -461,7 +461,7 @@ func TestPrintResidualsAgainstGoldenDefaults(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := rlooper.NewDefaultModel()
 	ens := rlooper.ComputeEnsemble(g.Sequence, m, 2, 1)
-	res := rlooper.ComputeResiduals(g.Sequence, m, 2, ens)
+	res := rlooper.ComputeResiduals(g.Sequence, m, 2, ens, 1)
 
 	var buf bytes.Buffer
 	if err := PrintResiduals(&buf, res); err != nil {

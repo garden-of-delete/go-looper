@@ -62,6 +62,13 @@ grep -n 'b_1=start' "$EQ_MODEL"
 grep -n 'bedfile = false;\|residuals = false;' "$SIM_CPP"
 grep -n '^CFLAGS' "$MAKEFILE"
 
+CFLAGS="$(sed -n 's/^CFLAGS *= *//p' "$MAKEFILE")"
+if [ -z "$CFLAGS" ]; then
+    echo "failed to derive CFLAGS from $MAKEFILE" >&2
+    exit 1
+fi
+read -ra CFLAGS_ARR <<< "$CFLAGS"
+
 OBJS="gene.o model.o Rloop_equilibrium_model.o simulation.o structure.o windower.o Rloop_dynamic_model.o"
 
 echo "--- compiling shared objects ---"
@@ -69,11 +76,11 @@ mkdir -p "$SRC_DIR/bin"
 make -C "$SRC_DIR" $OBJS ensemble_analyzer_main.o
 
 echo "--- linking rlooper ---"
-(cd "$SRC_DIR" && g++ -g -std=c++11 -O2 -o bin/rlooper $OBJS ensemble_analyzer_main.o)
+(cd "$SRC_DIR" && g++ "${CFLAGS_ARR[@]}" -o bin/rlooper $OBJS ensemble_analyzer_main.o)
 
 echo "--- building perloop ---"
-(cd "$SRC_DIR" && g++ -g -std=c++11 -O2 -c perloop_main.cpp -o perloop_main.o)
-(cd "$SRC_DIR" && g++ -g -std=c++11 -O2 -o bin/perloop $OBJS perloop_main.o)
+(cd "$SRC_DIR" && g++ "${CFLAGS_ARR[@]}" -c perloop_main.cpp -o perloop_main.o)
+(cd "$SRC_DIR" && g++ "${CFLAGS_ARR[@]}" -o bin/perloop $OBJS perloop_main.o)
 
 RLOOPER_BIN="$SRC_DIR/bin/rlooper"
 PERLOOP_BIN="$SRC_DIR/bin/perloop"

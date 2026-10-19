@@ -176,7 +176,7 @@ func processGene(stdout io.Writer, outFiles *FileOps, g *rlooper.Gene, cfg *conf
 	fmt.Fprintln(stdout, "complete!")
 
 	if cfg.Residuals {
-		res := rlooper.ComputeResiduals(g.Sequence, p.model, p.minLength, ens)
+		res := rlooper.ComputeResiduals(g.Sequence, p.model, p.minLength, ens, p.threads)
 		if err := PrintResiduals(stdout, res); err != nil {
 			return err
 		}

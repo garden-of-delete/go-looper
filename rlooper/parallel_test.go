@@ -51,6 +51,25 @@ func assertSignalsEquivalent(t *testing.T, p, s Signals) {
 	}
 }
 
+func assertResidualsEquivalent(t *testing.T, p, s Residuals) {
+	t.Helper()
+	if relOrAbs(p.Twist, s.Twist) > 1e-12 {
+		t.Fatalf("Twist %g vs %g", p.Twist, s.Twist)
+	}
+	if relOrAbs(p.LinkingDifference, s.LinkingDifference) > 1e-12 {
+		t.Fatalf("LinkingDifference %g vs %g", p.LinkingDifference, s.LinkingDifference)
+	}
+	if relOrAbs(p.Superhelicity, s.Superhelicity) > 1e-12 {
+		t.Fatalf("Superhelicity %g vs %g", p.Superhelicity, s.Superhelicity)
+	}
+	if relOrAbs(p.WrappingAbsorption, s.WrappingAbsorption) > 1e-12 {
+		t.Fatalf("WrappingAbsorption %g vs %g", p.WrappingAbsorption, s.WrappingAbsorption)
+	}
+	if relOrAbs(p.StrandSeparation, s.StrandSeparation) > 1e-12 {
+		t.Fatalf("StrandSeparation %g vs %g", p.StrandSeparation, s.StrandSeparation)
+	}
+}
+
 func TestParallelMatchesSerial(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
@@ -122,6 +141,37 @@ func TestParallelMFETieBreakMatchesSerial(t *testing.T) {
 	parallel := ComputeEnsemble(seq, m, 2, 8)
 
 	assertEnsembleEquivalent(t, parallel, serial)
+}
+
+func TestParallelResidualsMatchesSerial(t *testing.T) {
+	g := loadOrientedFixture(t)
+	m := NewDefaultModel()
+	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
+	s := ComputeResiduals(g.Sequence, m, 2, ens, 1)
+	p := ComputeResiduals(g.Sequence, m, 2, ens, 8)
+	assertResidualsEquivalent(t, p, s)
+}
+
+func TestParallelResidualsDeterministic(t *testing.T) {
+	g := loadOrientedFixture(t)
+	m := NewDefaultModel()
+	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
+
+	r1 := ComputeResiduals(g.Sequence, m, 2, ens, 4)
+	r2 := ComputeResiduals(g.Sequence, m, 2, ens, 4)
+
+	if r1 != r2 {
+		t.Fatalf("Residuals not deterministic: %+v vs %+v", r1, r2)
+	}
+}
+
+func TestParallelResidualsOversubscription(t *testing.T) {
+	m := NewDefaultModel()
+	seq := []byte("GATTACA")
+	ens := ComputeEnsemble(seq, m, 2, 1)
+	s := ComputeResiduals(seq, m, 2, ens, 1)
+	p := ComputeResiduals(seq, m, 2, ens, 64)
+	assertResidualsEquivalent(t, p, s)
 }
 
 func loadPfc53ForBench(b *testing.B) *Gene {

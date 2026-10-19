@@ -17,10 +17,10 @@ func TestDefaults(t *testing.T) {
 func TestSetterCoupling(t *testing.T) {
 	m := NewDefaultModel()
 	m.SetN(200)
-	near(t, m.K, 2200*GasConstant*310/200, 1e-12)
-	near(t, m.Alpha, 200*-0.07/10.4, 1e-12)
+	near(t, m.K, 6.771842275, 1e-9)
+	near(t, m.Alpha, -1.346153846153846, 1e-12)
 	m.SetSigma(-0.10)
-	near(t, m.Alpha, 200*-0.10/10.4, 1e-12)
+	near(t, m.Alpha, -1.923076923076923, 1e-12)
 }
 
 func TestSupercoilingEnergy(t *testing.T) {

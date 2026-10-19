@@ -50,7 +50,7 @@ func ReadGenes(r io.Reader) ([]*Gene, error) {
 				}
 				base, ok := upperBase(c)
 				if !ok {
-					return nil, fmt.Errorf("record %s: invalid base %q at position %d", current.Name, base, seqLen+1)
+					return nil, fmt.Errorf("record %s: invalid base %q at position %d", current.Name, c, seqLen+1)
 				}
 				current.Sequence = append(current.Sequence, base)
 				seqLen++
