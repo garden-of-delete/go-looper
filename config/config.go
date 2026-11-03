@@ -1,6 +1,5 @@
 package config
 
-// Config holds the global configuration values for the application
 type Config struct {
 	NucleationFreeEnergy *float64
 	SuperhelicityDomain  *int
@@ -16,6 +15,9 @@ type Config struct {
 	Residuals            bool
 	LocalAverageEnergy   bool
 	Homopolymer          *float64
+	Bedfile              bool
+	Sensitivity          *int
+	Top                  *int
 	InfileName           string
 	OutfileName          string
 }

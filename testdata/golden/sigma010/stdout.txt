@@ -1,0 +1,3 @@
+processing gene: SYNTH200...19900
+P(ground state)= 7.32925e-45
+complete!

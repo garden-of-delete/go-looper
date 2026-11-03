@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"runtime"
 	"strconv"
 
 	"golooper/config"
@@ -10,10 +11,8 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// cfg holds the global configuration
 var cfg config.Config
 
-// temporary variables to hold flag values
 var nucleationFreeEnergy float64
 var superhelicityDomain string
 var superhelicalDensity float64
@@ -22,35 +21,47 @@ var reverse bool
 var complement bool
 var unconstrained bool
 var homopolymer float64
+var sensitivity int
+var top int
 var infilename string
 var outfilename string
+var threads int
 
 var rootCmd = &cobra.Command{
 	Use:   "golooper [subcommand] [input_file] [output_path] [options]",
 	Short: "golooper is a CLI application for running biophysical simulations on nucleic acid energetics.",
 	Long: `Go Looper is a CLI application that provides various commands
 for running biophysical simulations on nucleic acid energetics with an emphasis on R-loops (genomic DNA/RNA hybrids).`,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		cfg.InfileName = infilename
 		cfg.OutfileName = outfilename
 
-		// Set the pointers in the config only if the flags are set
+		var flagErr error
 		cmd.Flags().Visit(func(f *pflag.Flag) {
+			if flagErr != nil {
+				return
+			}
 			switch f.Name {
 			case "a":
 				cfg.NucleationFreeEnergy = &nucleationFreeEnergy
 			case "N":
-				if superhelicityDomain == "auto" {
+				auto, value, err := parseSuperhelicityDomain(superhelicityDomain)
+				if err != nil {
+					flagErr = err
+					return
+				}
+				if auto {
 					cfg.AutoDomainSize = true
 				} else {
-					value, err := strconv.Atoi(superhelicityDomain)
-					if err == nil {
-						cfg.SuperhelicityDomain = &value
-					}
+					cfg.SuperhelicityDomain = &value
 				}
 			case "sigma":
 				cfg.SuperhelicalDensity = &superhelicalDensity
 			case "minlength":
+				if err := validateMinLength(minRLoopLength); err != nil {
+					flagErr = err
+					return
+				}
 				cfg.MinRLoopLength = &minRLoopLength
 			case "reverse":
 				cfg.Reverse = &reverse
@@ -60,17 +71,59 @@ for running biophysical simulations on nucleic acid energetics with an emphasis 
 				cfg.Unconstrained = &unconstrained
 			case "homopolymer":
 				cfg.Homopolymer = &homopolymer
+			case "sensitivity":
+				cfg.Sensitivity = &sensitivity
+			case "top":
+				cfg.Top = &top
 			}
 		})
+		if flagErr != nil {
+			return flagErr
+		}
+
+		return validateCircular(cfg.Circular)
 	},
 }
 
-// GetConfig returns the current configuration
+func parseSuperhelicityDomain(s string) (auto bool, value int, err error) {
+	if s == "auto" {
+		return true, 0, nil
+	}
+	n, convErr := strconv.Atoi(s)
+	if convErr != nil || n <= 0 {
+		return false, 0, fmt.Errorf("--N must be a positive integer or \"auto\", got %q", s)
+	}
+	return false, n, nil
+}
+
+func validateMinLength(n int) error {
+	if n < 2 {
+		return fmt.Errorf("--minlength must be at least 2, got %d", n)
+	}
+	return nil
+}
+
+func validateCircular(circular bool) error {
+	if circular {
+		return fmt.Errorf("circular mode is not implemented; sequences are treated as linear")
+	}
+	return nil
+}
+
+func requireInputOutput() error {
+	if cfg.InfileName == "" {
+		return fmt.Errorf("input file is required (use -f/--input)")
+	}
+	if cfg.OutfileName == "" {
+		return fmt.Errorf("output file is required (use -o/--output)")
+	}
+	return nil
+}
+
 func GetConfig() config.Config {
 	return cfg
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
 func Execute() error {
 	return rootCmd.Execute()
 }
@@ -132,13 +185,11 @@ Values not explicitly set via command line flags will use the model's default va
 			fmt.Printf("Dump Calculations (--dump): %v\n", cfg.Dump)
 			fmt.Printf("Circular Sequence (--circular): %v\n", cfg.Circular)
 			fmt.Printf("Calculate Residuals (--residuals): %v\n", cfg.Residuals)
-			fmt.Printf("Local Average Energy (--local-average-energy): %v\n", cfg.LocalAverageEnergy)
+			fmt.Printf("Local Average Energy (--localaverageenergy): %v\n", cfg.LocalAverageEnergy)
 			fmt.Println("---------------------")
 		},
 	})
 
-	rootCmd.MarkPersistentFlagRequired("input")
-	rootCmd.MarkPersistentFlagRequired("output")
 }
 
 func initFlags() {
@@ -153,8 +204,12 @@ func initFlags() {
 	rootCmd.PersistentFlags().BoolVarP(&cfg.Dump, "dump", "d", false, "dump all structures computed by the program to file")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.Circular, "circular", "C", false, "treat sequence as circular")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.Residuals, "residuals", "R", false, "calculate and output residual superhelicity for each structure")
-	rootCmd.PersistentFlags().BoolVarP(&cfg.LocalAverageEnergy, "local-average-energy", "l", false, "use local average energy for the simulation")
+	rootCmd.PersistentFlags().BoolVarP(&cfg.LocalAverageEnergy, "localaverageenergy", "l", false, "use local average energy for the simulation")
 	rootCmd.PersistentFlags().Float64VarP(&homopolymer, "homopolymer", "H", 0.0, "override base pairing energetics with constant value in Kcal/mol")
+	rootCmd.PersistentFlags().BoolVar(&cfg.Bedfile, "bedfile", false, "call peaks and write them to the bed output files")
+	rootCmd.PersistentFlags().IntVar(&sensitivity, "sensitivity", 1, "power-of-ten exponent for the absolute peak-calling threshold")
+	rootCmd.PersistentFlags().IntVar(&top, "top", 0, "print the N most probable structures to stdout")
 	rootCmd.PersistentFlags().StringVarP(&infilename, "input", "f", "", "input file name (required)")
 	rootCmd.PersistentFlags().StringVarP(&outfilename, "output", "o", "", "output file name (required)")
+	rootCmd.PersistentFlags().IntVar(&threads, "threads", runtime.NumCPU(), "number of worker goroutines to use for computation")
 }

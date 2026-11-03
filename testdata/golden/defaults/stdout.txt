@@ -1,0 +1,14 @@
+processing gene: SYNTH200...19900
+P(ground state)= 1.15646e-17
+complete!
+ensemble_residual_twist: -0.200898
+ensemble_residual_linking_difference: -2.51641
+ensemble_residual_superhelicity: -0.0174471
+ensemble_wrapping_absorption: -1.83643
+ensemble_strand_separation_absorption: -5.74331
+1145 1198 14.8587 0.00977414 -0.238538 -2.98788 -0.020716
+1144 1198 15.0124 0.00761476 -0.232187 -2.90834 -0.0201645
+1145 1199 15.0124 0.00761476 -0.232187 -2.90834 -0.0201645
+1143 1198 15.0654 0.00698699 -0.225932 -2.82999 -0.0196213
+1144 1199 15.1754 0.00584373 -0.225932 -2.82999 -0.0196213
+200

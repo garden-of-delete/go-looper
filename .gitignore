@@ -11,6 +11,10 @@
 *.bed
 golooper
 
+# committed golden test fixtures are an exception to the *.wig/*.bed rule above
+!testdata/golden/**/*.wig
+!testdata/golden/**/*.bed
+
 # Test binary, built with `go test -c`
 *.test
 

@@ -1,0 +1,5 @@
+track name=rLooper description="signal1_peaks_out" useScore=1
+browser position chrT:1000-1199
+#SYNTH200
+chrT	1004	1107	POS0	0	+
+chrT	1141	1198	POS1	0	+
