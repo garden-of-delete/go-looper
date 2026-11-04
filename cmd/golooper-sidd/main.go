@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"golooper/rlooper"
 	"golooper/sidd"
@@ -95,6 +97,7 @@ func (o *options) run(cmd *cobra.Command) error {
 	if o.tracks == "" {
 		return nil
 	}
+	setTrackLocation(gene, o.infile)
 	for suffix, signal := range map[string][]float64{"_sidd_bpprob.wig": result.P, "_sidd_gx.wig": result.G} {
 		err := writeFile(o.tracks+suffix, func(f *os.File) error {
 			return sim.WriteWigSignal(f, gene, signal)
@@ -112,9 +115,25 @@ func readSequence(r io.Reader, name string) ([]*rlooper.Gene, error) {
 		return nil, err
 	}
 	if len(data) > 0 && !startsWithFasta(data) {
-		data = append([]byte(">"+name+"\n"), data...)
+		data = append([]byte(">"+baseName(name)+"\n"), data...)
 	}
 	return rlooper.ReadGenes(bytes.NewReader(data))
+}
+
+func baseName(path string) string {
+	return strings.Join(strings.Fields(filepath.Base(path)), "_")
+}
+
+func setTrackLocation(g *rlooper.Gene, infile string) {
+	if g.Loc.Chromosome != "" {
+		return
+	}
+	g.Loc.Chromosome = g.Name
+	if g.Loc.Chromosome == "" {
+		g.Loc.Chromosome = baseName(infile)
+	}
+	g.Loc.Start = 1
+	g.Loc.End = int64(len(g.Sequence))
 }
 
 func startsWithFasta(data []byte) bool {

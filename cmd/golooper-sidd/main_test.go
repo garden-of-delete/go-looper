@@ -145,40 +145,68 @@ func firstDiff(want, got string) string {
 }
 
 func TestTracks(t *testing.T) {
-	dir := stageFixture(t, "pbr322.toy.fa")
-	report, err := runIn(t, dir, "-f", "pbr322.toy.fa", "--clamp", "--tracks", "trk")
+	raw, err := os.ReadFile(filepath.Join(fixturesDir, "pbr322.toy.fa"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var wantP, wantG []string
-	inTable := false
-	for _, line := range strings.Split(report, "\n") {
-		if strings.HasPrefix(line, "Position\t") {
-			inTable = true
-			continue
-		}
-		if !inTable || line == "" {
-			continue
-		}
-		f := strings.Split(line, "\t")
-		wantP = append(wantP, f[2])
-		wantG = append(wantG, f[3])
+	seq := strings.Join(strings.Fields(string(raw)), "")
+	n := strconv.Itoa(len(seq))
+	tests := []struct {
+		name, file, content   string
+		wantChrom, wantBrowse string
+		wantStart             int
+	}{
+		{"fixture", "pbr322.toy.fa", string(raw), "pbr322.toy.fa", "1-" + n, 1},
+		{"headerless raw sequence", "my seq.txt", seq + "\n", "my_seq.txt", "1-" + n, 1},
+		{"name header without range", "in.fa", ">pBR322 toy plasmid\n" + seq + "\n", "pBR322", "1-" + n, 1},
+		{"range header untouched", "in.fa", ">pBR322 range=chrZ:101-" + strconv.Itoa(100+len(seq)) + "\n" + seq + "\n", "chrZ", "101-" + strconv.Itoa(100+len(seq)), 101},
 	}
-	if len(wantP) == 0 {
-		t.Fatal("no table rows parsed")
-	}
-	for suffix, want := range map[string][]string{"_sidd_bpprob.wig": wantP, "_sidd_gx.wig": wantG} {
-		data, err := os.ReadFile(filepath.Join(dir, "trk"+suffix))
-		if err != nil {
-			t.Fatal(err)
-		}
-		lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
-		if len(lines) < 3 {
-			t.Fatalf("%s: too short", suffix)
-		}
-		if strings.Join(lines[3:], "\n") != strings.Join(want, "\n") {
-			t.Fatalf("%s values differ from report table", suffix)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := stageContent(t, tt.file, []byte(tt.content))
+			report, err := runIn(t, dir, "-f", tt.file, "--clamp", "--tracks", "trk")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var wantP, wantG []string
+			inTable := false
+			for _, line := range strings.Split(report, "\n") {
+				if strings.HasPrefix(line, "Position\t") {
+					inTable = true
+					continue
+				}
+				if !inTable || line == "" {
+					continue
+				}
+				f := strings.Split(line, "\t")
+				wantP = append(wantP, f[2])
+				wantG = append(wantG, f[3])
+			}
+			if len(wantP) == 0 {
+				t.Fatal("no table rows parsed")
+			}
+			for suffix, want := range map[string][]string{"_sidd_bpprob.wig": wantP, "_sidd_gx.wig": wantG} {
+				data, err := os.ReadFile(filepath.Join(dir, "trk"+suffix))
+				if err != nil {
+					t.Fatal(err)
+				}
+				lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+				if len(lines) < 3 {
+					t.Fatalf("%s: too short", suffix)
+				}
+				wantBrowser := "browser position " + tt.wantChrom + ":" + tt.wantBrowse
+				if lines[0] != wantBrowser {
+					t.Errorf("%s: browser line = %q, want %q", suffix, lines[0], wantBrowser)
+				}
+				wantFixed := "fixedStep chrom=" + tt.wantChrom + " start=" + strconv.Itoa(tt.wantStart) + " step=1"
+				if lines[2] != wantFixed {
+					t.Errorf("%s: fixedStep line = %q, want %q", suffix, lines[2], wantFixed)
+				}
+				if strings.Join(lines[3:], "\n") != strings.Join(want, "\n") {
+					t.Fatalf("%s values differ from report table", suffix)
+				}
+			}
+		})
 	}
 }
 

@@ -124,6 +124,8 @@ If you use `golooper-sidd`, cite the SIST paper, which its authors require for a
 
 (Citation strings are from the SIST README, `CCPBioSim/SIST` at `cc206d0`.)
 
+SIST's MIT license and the list of material derived from SIST are in [NOTICE](NOTICE).
+
 ### Flags and SIST equivalents
 
 | `golooper-sidd` | SIST `qsidd` | Notes |
