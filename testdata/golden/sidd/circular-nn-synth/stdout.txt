@@ -1,4 +1,4 @@
-DNA sequence file: ss_synth1600.fa
+DNA sequence file: sidd_synth1600.fa
 Sequence Length = 1600
 Energetics: Melting - nearest neighbor energetics
 Molecule type: circular DNA

@@ -10,6 +10,7 @@
 *.wig
 *.bed
 golooper
+/golooper-sidd
 
 # committed golden test fixtures are an exception to the *.wig/*.bed rule above
 !testdata/golden/**/*.wig

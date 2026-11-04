@@ -44,3 +44,7 @@ stdout captured and `^Run time` lines removed (wall-clock dependent).
 ```
 python3 -c "import random; random.seed(1600); s=''.join(random.choice('ACGT') for _ in range(1600)); print('>SS_SYNTH1600'); [print(s[i:i+70]) for i in range(0,1600,70)]" > testdata/fixtures/ss_synth1600.fa
 ```
+
+## Note 2026-11-04
+
+Resources renamed ss -> sidd: the golden directory (`testdata/golden/ss` -> `testdata/golden/sidd`), the synthetic fixture (`ss_synth1600.fa` -> `sidd_synth1600.fa`, header `>SS_SYNTH1600` -> `>SIDD_SYNTH1600`, sequence bytes untouched), and the script (`scripts/gen-ss-goldens.sh` -> `scripts/gen-sidd-goldens.sh`). The first line of the `clamp-copoly-synth` and `circular-nn-synth` goldens was edited to name the new fixture file. Numeric content is untouched. The provenance above is the original text and still shows the old names.

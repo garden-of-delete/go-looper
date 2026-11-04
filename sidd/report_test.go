@@ -52,7 +52,7 @@ func assertReportParity(t *testing.T, goldenCase string, mutate func(*Params)) {
 	if err := WriteReport(&got, "pbr322.toy.fa", m, res); err != nil {
 		t.Fatal(err)
 	}
-	want, err := os.ReadFile("../testdata/golden/ss/" + goldenCase + "/stdout.txt")
+	want, err := os.ReadFile("../testdata/golden/sidd/" + goldenCase + "/stdout.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
