@@ -73,11 +73,13 @@ func Run(m *Model) (*Result, error) {
 	minE := minimumEnergy(m, lists)
 	res := &Result{MinE: minE, MaxE: minE + m.Threshold}
 
+	cells := newCellMatrix(m)
 	var sumB, sumG float64
 	forEachRetained(m, lists, minE, func(s, n int, E, w float64) {
 		res.OneRunStates++
 		sumB += w
 		sumG += float64(E * w)
+		cells.add(s, n, E, w)
 	})
 
 	res.GroundW = math.Exp(-m.Alpha*m.Alpha*m.K/2/m.RT + Shift)
@@ -89,5 +91,6 @@ func Run(m *Model) (*Result, error) {
 	}
 	res.AvgRuns = sumB / res.ZB
 	res.TransitionProb = (res.ZB - res.GroundW) / res.ZB
+	cells.accumulate(m).finish(m, res.ZB, res.ZG, res)
 	return res, nil
 }
