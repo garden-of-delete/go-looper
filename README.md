@@ -83,7 +83,7 @@ effect on `perloop`'s output.
 | `--input` | `-f` | input FASTA file (required) |
 | `--output` | `-o` | output path prefix (required) |
 | `--sigma` | `-s` | superhelical density, e.g. `0.07` for +7% |
-| `--N` | `-N` | size of the superhelicity domain in nucleotides, or `auto` to size it to the sequence length |
+| `--N` | `-N` | size of the superhelicity domain in nucleotides, or `auto` to size it to the sequence length (the default under `--circular`) |
 | `--a` | `-a` | nucleation free energy, Kcal/mol |
 | `--minlength` | `-m` | minimum R-loop length, nucleotides |
 | `--reverse` | `-r` | reverse the sequence (5'↔3') before simulating |
@@ -98,7 +98,7 @@ effect on `perloop`'s output.
 | `--residuals` | `-R` | compute and report residual twist/linking-difference/superhelicity |
 | `--localaverageenergy` | `-l` | also compute and populate the `_avgG.wig` average-energy signal |
 | `--threads` | | number of worker goroutines for the ensemble/signal computation (default: all CPUs) |
-| `--circular` | `-C` | not implemented; passing it is a hard error ("circular mode is not implemented; sequences are treated as linear") |
+| `--circular` | `-C` | treat the sequence as a covalently closed circle (see Circular mode below) |
 
 `--reverse`/`--complement`/`--invert` apply on top of an automatic orientation
 already derived from the FASTA header's `strand=` field: `+` complements the
@@ -108,7 +108,8 @@ convention described below.
 `--sigma`, `--N`, `--a`, and `--minlength` are only overridden when the flag is
 explicitly passed; `go run . ensemble --help` shows placeholder zero values for
 these, but the model's actual defaults when a flag is omitted are σ = -0.07,
-N = 1500 nt, a = 10 Kcal/mol, and minimum R-loop length = 2 nt.
+N = 1500 nt (or the sequence length under `--circular`), a = 10 Kcal/mol, and
+minimum R-loop length = 2 nt.
 
 `--sensitivity` sets the peak threshold to `10^sensitivity` as an absolute
 probability cutoff. The default, `1`, gives a threshold of `10`, which no
@@ -119,6 +120,69 @@ reproduces rlooper2's behavior deliberately; pass a negative value (e.g.
 `--unconstrained` removes the supercoiling term from candidate-structure
 energies but not from the ground state, matching rlooper2; it is only
 physically meaningful combined with `--sigma 0`.
+
+## Circular mode
+
+`--circular` treats a sequence as a covalently closed circle of length n
+instead of a linear molecule, for both `ensemble` and `perloop`. The
+structure ensemble becomes every window (start, length) with start in
+`[0, n-1]` and length in `[minlength, n-1]` — every rotation at every length
+is enumerated, for `n·(n-minlength)` structures in total. The full-circle
+window (length n) is excluded: every R-loop structure has two real strand
+junctions, but a window spanning the entire circle would have none, so that
+length is never considered. A window whose start+length exceeds n wraps
+through the origin and credits bases `(start+j) mod n` for `j` in
+`[0, length-2]` — the same "last base of the window is uncredited" convention
+linear mode uses, applied cyclically.
+
+This is Go-defined semantics, not a port of the C++ rlooper2's `--circular`.
+That implementation hangs for `--minlength >= 3` and omits every wrapped
+structure from its per-base signals while still counting those structures in
+the partition function — it is not a usable reference and is not treated as
+one here. See
+`docs/superpowers/specs/2026-11-03-circular-mode-design.md` for the full
+semantics and the empirical trace of the C++ behavior. Circular-mode output
+is validated independently (below) rather than against a C++ golden.
+
+Under `--circular`, `--N` defaults per gene to the sequence length rather
+than the model's usual 1500nt default — the closed circle is its own
+torsional domain — using the same path as `--N auto`. An explicit numeric
+`--N` overrides this default; if it differs from the sequence length, a note
+is printed to stderr: `note: --N %d differs from circular sequence length
+%d`. `--N auto` is also accepted under `--circular`, redundantly setting the
+same default.
+
+`--dump` and `--top` rows for a wrapped structure print with
+`stop_position < start_position` in genomic coordinates; this is how the
+wrap is encoded. A row with `stop_position >= start_position` is a
+non-wrapped structure, as in linear mode. `--bedfile` peak-calling treats
+the signal as cyclic: if the runs touching index 0 and index n-1 are both
+above threshold, they are one peak spanning the origin, emitted as two BED
+rows — the arc ending at n-1, then the arc starting at 0 — sharing one peak
+name/index, so the two rows can be rejoined downstream by name. If the
+entire signal is above threshold, it is emitted as a single full-span row.
+Because the end-arc row is emitted before the start-arc row by design, an
+origin-spanning peak's two rows are not in ascending genomic order; pipe
+circular `--bedfile` output through `sort -k1,1 -k2,2n` before feeding it to
+tools that assume BED-sorted input.
+
+`perloop` accepts `--circular` identically to `ensemble`. A side effect:
+`--N auto` (and the circular `--N` default) now takes effect under
+`perloop`, in both circular and linear runs. In the C++ rlooper2,
+`simulation_B` (perloop's equivalent) silently ignored `auto_domain_size`;
+that was untested behavior rather than a deliberate design choice, and this
+port does not reproduce it.
+
+Because the C++ reference is not a usable oracle for circular mode, its
+output is validated by properties instead of goldens: an independent
+small-n enumeration (naive modular loops, no prefix sums or suffix-sum
+walks) cross-checked against the production path; rotation invariance of
+the partition function, every per-base signal, and the MFE location under a
+rotation of the input sequence; bit-parity between every non-wrapped
+window's energy in circular mode and the same window's energy in linear
+mode; a closed-form check against an analytic homopolymer case; and
+parallel equivalence/determinism across worker counts. The full validation
+plan is in `docs/superpowers/specs/2026-11-03-circular-mode-design.md` §6.
 
 ## FASTA header convention
 
@@ -143,13 +207,18 @@ the file is read.
 ## Validation
 
 Every energy, probability, signal, bed peak, dump row, and perloop point this
-port produces is checked against a patched build of the original C++
-rlooper2 at commit `455983bad1e9d49eb0e484f7746e60b16bd9868d`, at a tolerance
-of `max(1e-9, 1e-5·|reference|)`. The goldens live under `testdata/golden/`
-and can be regenerated at any time against a local rlooper2 checkout with
-`scripts/gen-golden.sh`; the patches applied to the C++ build (documented in
-`testdata/golden/README.md`) only remove undefined behavior and do not change
-any computed value.
+port produces in linear mode — except perloop points computed with `--N
+auto`, where this port deliberately diverges from the C++ (see Circular mode
+above) — is checked against a patched build of the original C++ rlooper2 at
+commit `455983bad1e9d49eb0e484f7746e60b16bd9868d`, at a tolerance of
+`max(1e-9, 1e-5·|reference|)`. The goldens live under
+`testdata/golden/` and can be regenerated at any time against a local
+rlooper2 checkout with `scripts/gen-golden.sh`; the patches applied to the
+C++ build (documented in `testdata/golden/README.md`) only remove undefined
+behavior and do not change any computed value. Circular mode (`--circular`)
+is validated differently, by the properties described in Circular mode
+above, because the C++ reference's own circular implementation is broken
+and is not a usable oracle.
 
 A handful of rlooper2 behaviors that affect output values are preserved
 deliberately rather than "fixed": the peak-calling threshold default above,
@@ -160,7 +229,7 @@ energy `--a` is likewise folded into the ground-state energy only
 (`ground state = K·α²/2 − a`) and excluded from every other structure's
 reported energy — so the per-structure energies in `--dump` and `--top`
 output are raw supercoiling-plus-base-pairing energies, not values relative
-to the ground state. There are three places this port departs from rlooper2
+to the ground state. There are four places this port departs from rlooper2
 on purpose. First, where exact energy ties occur: rlooper2's enumeration
 order resolves them arbitrarily, while golooper's parallel merge uses a
 total order that always resolves a tie to the lowest-start window,
@@ -172,7 +241,11 @@ mirror for both, so `--top` and `--dump` always agree. Third, chromosome
 names are reported as given in the FASTA header; rlooper2 lowercases the
 chromosome name and then re-uppercases its last character (visible in the
 golden `pfc53` case, where `PFC53FIXED` becomes `pfc53fixeD`), which this
-port does not reproduce.
+port does not reproduce. Fourth, `--N auto`'s effectiveness under `perloop`:
+the C++ `simulation_B` (perloop's equivalent) silently ignored
+`auto_domain_size`, untested behavior rather than a deliberate choice, while
+this port makes `--N auto` (and the circular `--N` default) effective under
+`perloop` in both circular and linear runs (see Circular mode above).
 
 ## Performance
 
@@ -187,3 +260,9 @@ speedup — reproducible with:
 ```
 go test ./rlooper/ -run XXX -bench BenchmarkEnsemblePfc53
 ```
+
+`--circular` roughly doubles the window count for the same sequence (every
+start has `n-minlength` lengths available instead of up to `n-start`), so
+runtime and memory scale accordingly: on `res/pfc53_full.fa` (3,906nt),
+`--dump` peaks at roughly 1.0GB RSS and writes a 344MB dump file under
+`--circular`, versus roughly 0.5GB RSS and a 183MB dump file in linear mode.

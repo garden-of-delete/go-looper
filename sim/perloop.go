@@ -39,6 +39,7 @@ func RunPerloop(cfg *config.Config, lo, hi, step float64, threads int) error {
 	warnGeneAnomalies(os.Stderr, g)
 
 	p := paramsFromConfig(cfg, threads)
+	resolveDomainSize(cfg, p.model, len(g.Sequence), os.Stderr)
 	g.ApplyOrientation(p.complement, p.reverse, cfg.Invert)
 
 	f, err := createFileWithDir(cfg.OutfileName + "_perloop.txt")
@@ -47,9 +48,10 @@ func RunPerloop(cfg *config.Config, lo, hi, step float64, threads int) error {
 	}
 	outFile := newBufferedFile(f)
 
+	windows := rlooper.Windows{MinLength: p.minLength, Circular: p.circular, Workers: p.threads}
 	for _, sigma := range sigmaGrid(lo, hi, step) {
 		p.model.SetSigma(sigma)
-		ens := rlooper.ComputeEnsemble(g.Sequence, p.model, p.minLength, p.threads)
+		ens := rlooper.ComputeEnsemble(g.Sequence, p.model, windows)
 		if _, err := fmt.Fprintf(outFile, "%s %s\n", formatValue(sigma), formatValue(1-ens.PGround)); err != nil {
 			outFile.Close()
 			return fmt.Errorf("error writing perloop output: %v", err)

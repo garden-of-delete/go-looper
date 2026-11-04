@@ -127,6 +127,14 @@ func peakWindows(peaks []rlooper.Loci) [][2]int64 {
 	return out
 }
 
+func flattenPeakSpans(peaks []Peak) []rlooper.Loci {
+	var out []rlooper.Loci
+	for _, p := range peaks {
+		out = append(out, p.Spans...)
+	}
+	return out
+}
+
 type topRow struct {
 	start, stop                                           int64
 	energy, prob, twist, linkingDifference, superhelicity float64
@@ -199,16 +207,51 @@ func parseResiduals(t *testing.T, r io.Reader) map[string]float64 {
 	return values
 }
 
-func TestCallPeaksAbsoluteUnit(t *testing.T) {
-	g := &rlooper.Gene{Loc: rlooper.Loci{Chromosome: "chrT", Strand: "+", Start: 100}}
-	signal := []float64{0, 0.5, 0.5, 0, 0.2, 0, 0.9}
-	got := CallPeaksAbsolute(signal, 0.1, g)
-	want := []rlooper.Loci{
-		{Chromosome: "chrT", Strand: "+", Start: 101, End: 103},
-		{Chromosome: "chrT", Strand: "+", Start: 104, End: 105},
+func TestCallPeaksCircularOriginSpanningMerge(t *testing.T) {
+	g := &rlooper.Gene{Loc: rlooper.Loci{Chromosome: "p", Strand: "+", Start: 100}}
+	signal := []float64{0.5, 0.2, 0, 0, 0.3, 0.9}
+	peaks := CallPeaks(signal, 0.1, g, true)
+	if len(peaks) != 1 || len(peaks[0].Spans) != 2 {
+		t.Fatalf("peaks=%+v", peaks)
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("peaks = %+v, want %+v", got, want)
+	if peaks[0].Spans[0].Start != 104 || peaks[0].Spans[0].End != 106 ||
+		peaks[0].Spans[1].Start != 100 || peaks[0].Spans[1].End != 102 {
+		t.Fatalf("spans=%+v", peaks[0].Spans)
+	}
+	var buf bytes.Buffer
+	if err := WriteBedPeaks(&buf, g, peaks); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(buf.String(), "POS0") != 2 || strings.Contains(buf.String(), "POS1") {
+		t.Fatalf("rows should share POS0: %q", buf.String())
+	}
+}
+
+func TestCallPeaksCircularNoFalseMerge(t *testing.T) {
+	g := &rlooper.Gene{Loc: rlooper.Loci{Strand: "+", Start: 0}}
+	if p := CallPeaks([]float64{0, 0.5, 0, 0, 0.5, 0.5}, 0.1, g, true); len(p) != 2 {
+		t.Fatalf("trailing-only: %+v", p)
+	}
+	if p := CallPeaks([]float64{0.5, 0.5, 0, 0, 0.5, 0}, 0.1, g, true); len(p) != 2 {
+		t.Fatalf("leading-only separated: %+v", p)
+	}
+}
+
+func TestCallPeaksCircularAllAbove(t *testing.T) {
+	g := &rlooper.Gene{Loc: rlooper.Loci{Strand: "+", Start: 10}}
+	p := CallPeaks([]float64{0.5, 0.5, 0.5}, 0.1, g, true)
+	if len(p) != 1 || len(p[0].Spans) != 1 || p[0].Spans[0].Start != 10 || p[0].Spans[0].End != 13 {
+		t.Fatalf("%+v", p)
+	}
+}
+
+func TestCallPeaksLinearUnchanged(t *testing.T) {
+	g := &rlooper.Gene{Loc: rlooper.Loci{Chromosome: "chrT", Strand: "+", Start: 100}}
+	peaks := CallPeaks([]float64{0, 0.5, 0.5, 0, 0.2, 0, 0.9}, 0.1, g, false)
+	if len(peaks) != 2 ||
+		peaks[0].Spans[0].Start != 101 || peaks[0].Spans[0].End != 103 ||
+		peaks[1].Spans[0].Start != 104 || peaks[1].Spans[0].End != 105 {
+		t.Fatalf("%+v", peaks)
 	}
 }
 
@@ -226,7 +269,7 @@ func TestWriteWigSignalUnit(t *testing.T) {
 
 func TestWriteBedPeaksNegativeStrand(t *testing.T) {
 	g := &rlooper.Gene{Name: "X", Loc: rlooper.Loci{Chromosome: "chrT", Strand: "-", Start: 100, End: 110}}
-	peaks := []rlooper.Loci{{Chromosome: "chrT", Strand: "-", Start: 101, End: 103}}
+	peaks := []Peak{{Spans: []rlooper.Loci{{Chromosome: "chrT", Strand: "-", Start: 101, End: 103}}}}
 	var buf bytes.Buffer
 	if err := WriteBedPeaks(&buf, g, peaks); err != nil {
 		t.Fatal(err)
@@ -249,6 +292,22 @@ func TestWriteDumpNegativeStrandFlip(t *testing.T) {
 	}
 	if !strings.HasPrefix(lines[2], "14 17 ") {
 		t.Fatalf("row = %q, want prefix %q", lines[2], "14 17 ")
+	}
+}
+
+func TestWriteDumpWrappedSpanPinning(t *testing.T) {
+	g := &rlooper.Gene{Loc: rlooper.Loci{Strand: "+", Start: 100}}
+	recs := []rlooper.StructureRecord{{Start: 5, End: 1, Energy: 1, Prob: 0.5}}
+	var buf bytes.Buffer
+	if err := WriteDump(&buf, g, 0, recs); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("expected 3 lines, got %d: %q", len(lines), buf.String())
+	}
+	if !strings.HasPrefix(lines[2], "105 101 ") {
+		t.Fatalf("row = %q, want prefix %q", lines[2], "105 101 ")
 	}
 }
 
@@ -275,6 +334,38 @@ func TestPrintTopNegativeStrandFlip(t *testing.T) {
 	}
 }
 
+func TestPrintTopWrappedResidualsMatchNonWrappedTwin(t *testing.T) {
+	n := 200
+	wrapped := &rlooper.Gene{Loc: rlooper.Loci{Strand: "+", Start: 0}, Sequence: make([]byte, n)}
+	nonWrapped := &rlooper.Gene{Loc: rlooper.Loci{Strand: "+", Start: 0}, Sequence: make([]byte, n)}
+	wrappedRecs := []rlooper.StructureRecord{{Start: 190, End: 5, Energy: -12.3, Prob: 0.02}}
+	nonWrappedRecs := []rlooper.StructureRecord{{Start: 0, End: 15, Energy: -12.3, Prob: 0.02}}
+	if wrappedRecs[0].Length(n) != nonWrappedRecs[0].Length(n) {
+		t.Fatalf("setup: wrapped length %d != non-wrapped twin length %d", wrappedRecs[0].Length(n), nonWrappedRecs[0].Length(n))
+	}
+
+	m := rlooper.NewDefaultModel()
+	var wrappedBuf, nonWrappedBuf bytes.Buffer
+	if err := PrintTop(&wrappedBuf, wrapped, m, wrappedRecs, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := PrintTop(&nonWrappedBuf, nonWrapped, m, nonWrappedRecs, 1, true); err != nil {
+		t.Fatal(err)
+	}
+
+	wrappedRows := parseTopRows(t, strings.NewReader(wrappedBuf.String()))
+	nonWrappedRows := parseTopRows(t, strings.NewReader(nonWrappedBuf.String()))
+	if len(wrappedRows) != 1 || len(nonWrappedRows) != 1 {
+		t.Fatalf("expected 1 parsed row each, got %d and %d", len(wrappedRows), len(nonWrappedRows))
+	}
+
+	got, want := wrappedRows[0], nonWrappedRows[0]
+	if got.twist != want.twist || got.linkingDifference != want.linkingDifference || got.superhelicity != want.superhelicity {
+		t.Fatalf("wrapped residual columns %+v != non-wrapped twin residual columns %+v (same Energy/Prob, same window length %d)",
+			got, want, wrappedRecs[0].Length(n))
+	}
+}
+
 func TestLargeCoordinatesPrintAsIntegers(t *testing.T) {
 	g := &rlooper.Gene{
 		Name:     "BIG",
@@ -291,7 +382,7 @@ func TestLargeCoordinatesPrintAsIntegers(t *testing.T) {
 		t.Fatalf("wig output missing exact integer coordinate: %q", wigBuf.String())
 	}
 
-	peaks := []rlooper.Loci{{Chromosome: "chr1", Strand: "+", Start: 123456789, End: 123456988}}
+	peaks := []Peak{{Spans: []rlooper.Loci{{Chromosome: "chr1", Strand: "+", Start: 123456789, End: 123456988}}}}
 	var bedBuf bytes.Buffer
 	if err := WriteBedPeaks(&bedBuf, g, peaks); err != nil {
 		t.Fatal(err)
@@ -349,8 +440,8 @@ func TestPrintResidualsUnit(t *testing.T) {
 func TestWriteDumpAgainstGoldenDefaults(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := rlooper.NewDefaultModel()
-	ens := rlooper.ComputeEnsemble(g.Sequence, m, 2, 1)
-	recs := rlooper.AllStructures(g.Sequence, m, 2, ens)
+	ens := rlooper.ComputeEnsemble(g.Sequence, m, rlooper.Windows{MinLength: 2, Workers: 1})
+	recs := rlooper.AllStructures(g.Sequence, m, rlooper.Windows{MinLength: 2, Workers: 1}, ens)
 
 	var buf bytes.Buffer
 	if err := WriteDump(&buf, g, m.GroundStateEnergy(), recs); err != nil {
@@ -387,30 +478,30 @@ func TestWriteDumpAgainstGoldenDefaults(t *testing.T) {
 	}
 }
 
-func TestCallPeaksAbsoluteAgainstGoldenDefaults(t *testing.T) {
+func TestCallPeaksAgainstGoldenDefaults(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := rlooper.NewDefaultModel()
-	ens := rlooper.ComputeEnsemble(g.Sequence, m, 2, 1)
-	sig := rlooper.ComputeSignals(g.Sequence, m, 2, ens, true, 1)
+	ens := rlooper.ComputeEnsemble(g.Sequence, m, rlooper.Windows{MinLength: 2, Workers: 1})
+	sig := rlooper.ComputeSignals(g.Sequence, m, rlooper.Windows{MinLength: 2, Workers: 1}, ens, true)
 
-	bpPeaks := CallPeaksAbsolute(sig.BPProb, 0.1, g)
+	bpPeaks := CallPeaks(sig.BPProb, 0.1, g, false)
 	wantBP := parseBedPeaks(t, "../testdata/golden/defaults/out_bpprob.bed")
-	if !reflect.DeepEqual(peakWindows(bpPeaks), peakWindows(wantBP)) {
-		t.Fatalf("bpprob peaks = %v, want %v", peakWindows(bpPeaks), peakWindows(wantBP))
+	if !reflect.DeepEqual(peakWindows(flattenPeakSpans(bpPeaks)), peakWindows(wantBP)) {
+		t.Fatalf("bpprob peaks = %v, want %v", peakWindows(flattenPeakSpans(bpPeaks)), peakWindows(wantBP))
 	}
 
-	mfePeaks := CallPeaksAbsolute(sig.MFE, 0.1, g)
+	mfePeaks := CallPeaks(sig.MFE, 0.1, g, false)
 	wantMFE := parseBedPeaks(t, "../testdata/golden/defaults/out_mfe.bed")
-	if !reflect.DeepEqual(peakWindows(mfePeaks), peakWindows(wantMFE)) {
-		t.Fatalf("mfe peaks = %v, want %v", peakWindows(mfePeaks), peakWindows(wantMFE))
+	if !reflect.DeepEqual(peakWindows(flattenPeakSpans(mfePeaks)), peakWindows(wantMFE)) {
+		t.Fatalf("mfe peaks = %v, want %v", peakWindows(flattenPeakSpans(mfePeaks)), peakWindows(wantMFE))
 	}
 }
 
 func TestPrintTopAgainstGoldenDefaults(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := rlooper.NewDefaultModel()
-	ens := rlooper.ComputeEnsemble(g.Sequence, m, 2, 1)
-	recs := rlooper.AllStructures(g.Sequence, m, 2, ens)
+	ens := rlooper.ComputeEnsemble(g.Sequence, m, rlooper.Windows{MinLength: 2, Workers: 1})
+	recs := rlooper.AllStructures(g.Sequence, m, rlooper.Windows{MinLength: 2, Workers: 1}, ens)
 
 	recsByCoord := make(map[[2]int]float64, len(recs))
 	for _, r := range recs {
@@ -460,8 +551,8 @@ func TestPrintTopAgainstGoldenDefaults(t *testing.T) {
 func TestPrintResidualsAgainstGoldenDefaults(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := rlooper.NewDefaultModel()
-	ens := rlooper.ComputeEnsemble(g.Sequence, m, 2, 1)
-	res := rlooper.ComputeResiduals(g.Sequence, m, 2, ens, 1)
+	ens := rlooper.ComputeEnsemble(g.Sequence, m, rlooper.Windows{MinLength: 2, Workers: 1})
+	res := rlooper.ComputeResiduals(g.Sequence, m, rlooper.Windows{MinLength: 2, Workers: 1}, ens)
 
 	var buf bytes.Buffer
 	if err := PrintResiduals(&buf, res); err != nil {

@@ -60,11 +60,26 @@ func boolPtr(p *bool) bool {
 	return p != nil && *p
 }
 
+func resolveDomainSize(cfg *config.Config, m *rlooper.EnergyModel, seqLen int, stderr io.Writer) {
+	if cfg.SuperhelicityDomain != nil {
+		n := *cfg.SuperhelicityDomain
+		m.SetN(float64(n))
+		if cfg.Circular && n != seqLen {
+			fmt.Fprintf(stderr, "note: --N %d differs from circular sequence length %d\n", n, seqLen)
+		}
+		return
+	}
+	if cfg.AutoDomainSize || cfg.Circular {
+		m.SetN(float64(seqLen))
+	}
+}
+
 type ensembleParams struct {
 	model      *rlooper.EnergyModel
 	minLength  int
 	complement bool
 	reverse    bool
+	circular   bool
 	top        int
 	threshold  float64
 	threads    int
@@ -76,6 +91,7 @@ func paramsFromConfig(cfg *config.Config, threads int) ensembleParams {
 		minLength:  minLengthFromConfig(cfg),
 		complement: boolPtr(cfg.Complement),
 		reverse:    boolPtr(cfg.Reverse),
+		circular:   cfg.Circular,
 		top:        topFromConfig(cfg),
 		threshold:  math.Pow(10, float64(sensitivityFromConfig(cfg))),
 		threads:    threads,
@@ -132,16 +148,15 @@ func processGene(stdout io.Writer, outFiles *FileOps, g *rlooper.Gene, cfg *conf
 
 	warnGeneAnomalies(os.Stderr, g)
 
-	if cfg.AutoDomainSize {
-		p.model.SetN(float64(len(g.Sequence)))
-	}
+	resolveDomainSize(cfg, p.model, len(g.Sequence), os.Stderr)
 	g.ApplyOrientation(p.complement, p.reverse, cfg.Invert)
 
-	ens := rlooper.ComputeEnsemble(g.Sequence, p.model, p.minLength, p.threads)
+	windows := rlooper.Windows{MinLength: p.minLength, Circular: p.circular, Workers: p.threads}
+	ens := rlooper.ComputeEnsemble(g.Sequence, p.model, windows)
 	fmt.Fprintln(stdout, ens.NumStructures)
 	fmt.Fprintf(stdout, "P(ground state)= %s\n", formatValue(ens.PGround))
 
-	sig := rlooper.ComputeSignals(g.Sequence, p.model, p.minLength, ens, cfg.LocalAverageEnergy, p.threads)
+	sig := rlooper.ComputeSignals(g.Sequence, p.model, windows, ens, cfg.LocalAverageEnergy)
 	if g.Loc.Strand == "-" {
 		slices.Reverse(sig.BPProb)
 		slices.Reverse(sig.MFE)
@@ -163,11 +178,11 @@ func processGene(stdout io.Writer, outFiles *FileOps, g *rlooper.Gene, cfg *conf
 	}
 
 	if cfg.Bedfile {
-		bpPeaks := CallPeaksAbsolute(sig.BPProb, p.threshold, g)
+		bpPeaks := CallPeaks(sig.BPProb, p.threshold, g, p.circular)
 		if err := WriteBedPeaks(outFiles.BasePairProbBed, g, bpPeaks); err != nil {
 			return err
 		}
-		mfePeaks := CallPeaksAbsolute(sig.MFE, p.threshold, g)
+		mfePeaks := CallPeaks(sig.MFE, p.threshold, g, p.circular)
 		if err := WriteBedPeaks(outFiles.MinFreeEnergyBed, g, mfePeaks); err != nil {
 			return err
 		}
@@ -176,14 +191,14 @@ func processGene(stdout io.Writer, outFiles *FileOps, g *rlooper.Gene, cfg *conf
 	fmt.Fprintln(stdout, "complete!")
 
 	if cfg.Residuals {
-		res := rlooper.ComputeResiduals(g.Sequence, p.model, p.minLength, ens, p.threads)
+		res := rlooper.ComputeResiduals(g.Sequence, p.model, windows, ens)
 		if err := PrintResiduals(stdout, res); err != nil {
 			return err
 		}
 	}
 
 	if p.top > 0 {
-		top := rlooper.TopStructures(g.Sequence, p.model, p.minLength, ens, p.top)
+		top := rlooper.TopStructures(g.Sequence, p.model, windows, ens, p.top)
 		if err := PrintTop(stdout, g, p.model, top, p.top, cfg.Residuals); err != nil {
 			return err
 		}
@@ -193,7 +208,7 @@ func processGene(stdout io.Writer, outFiles *FileOps, g *rlooper.Gene, cfg *conf
 		if g.Loc.Strand != "+" && g.Loc.Strand != "-" {
 			return fmt.Errorf("dump error: strand unspecified")
 		}
-		recs := rlooper.AllStructures(g.Sequence, p.model, p.minLength, ens)
+		recs := rlooper.AllStructures(g.Sequence, p.model, windows, ens)
 		if err := dumpGene(stdout, cfg, g, p.model, recs); err != nil {
 			return err
 		}

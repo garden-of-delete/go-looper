@@ -33,8 +33,18 @@ func WriteWigSignal(w io.Writer, g *rlooper.Gene, signal []float64) error {
 	return nil
 }
 
-func CallPeaksAbsolute(signal []float64, threshold float64, g *rlooper.Gene) []rlooper.Loci {
-	var peaks []rlooper.Loci
+type Peak struct {
+	Spans []rlooper.Loci
+}
+
+func CallPeaks(signal []float64, threshold float64, g *rlooper.Gene, circular bool) []Peak {
+	if circular {
+		return callPeaksCircular(signal, threshold, g)
+	}
+	return callPeaksLinear(signal, threshold, g)
+}
+
+func scanAboveThresholdRuns(signal []float64, threshold float64, g *rlooper.Gene) (peaks []Peak, openStart int64, open bool) {
 	inPeak := false
 	var peakStart int64
 
@@ -45,19 +55,45 @@ func CallPeaksAbsolute(signal []float64, threshold float64, g *rlooper.Gene) []r
 			peakStart = g.Loc.Start + int64(i)
 		case v <= threshold && inPeak:
 			inPeak = false
-			peaks = append(peaks, rlooper.Loci{
+			peaks = append(peaks, Peak{Spans: []rlooper.Loci{{
 				Chromosome: g.Loc.Chromosome,
 				Strand:     g.Loc.Strand,
 				Start:      peakStart,
 				End:        g.Loc.Start + int64(i),
-			})
+			}}})
 		}
 	}
 
+	return peaks, peakStart, inPeak
+}
+
+func callPeaksLinear(signal []float64, threshold float64, g *rlooper.Gene) []Peak {
+	peaks, _, _ := scanAboveThresholdRuns(signal, threshold, g)
 	return peaks
 }
 
-func WriteBedPeaks(w io.Writer, g *rlooper.Gene, peaks []rlooper.Loci) error {
+func callPeaksCircular(signal []float64, threshold float64, g *rlooper.Gene) []Peak {
+	peaks, openStart, open := scanAboveThresholdRuns(signal, threshold, g)
+	if !open {
+		return peaks
+	}
+
+	endArc := rlooper.Loci{
+		Chromosome: g.Loc.Chromosome,
+		Strand:     g.Loc.Strand,
+		Start:      openStart,
+		End:        g.Loc.Start + int64(len(signal)),
+	}
+
+	if len(peaks) > 0 && peaks[0].Spans[0].Start == g.Loc.Start {
+		peaks[0].Spans = []rlooper.Loci{endArc, peaks[0].Spans[0]}
+		return peaks
+	}
+
+	return append(peaks, Peak{Spans: []rlooper.Loci{endArc}})
+}
+
+func WriteBedPeaks(w io.Writer, g *rlooper.Gene, peaks []Peak) error {
 	if _, err := fmt.Fprintf(w, "browser position %s:%d-%d\n#%s\n", g.Loc.Chromosome, g.Loc.Start, g.Loc.End, g.Name); err != nil {
 		return err
 	}
@@ -67,9 +103,11 @@ func WriteBedPeaks(w io.Writer, g *rlooper.Gene, peaks []rlooper.Loci) error {
 		name = "POS"
 	}
 
-	for i, p := range peaks {
-		if _, err := fmt.Fprintf(w, "%s\t%d\t%d\t%s%d\t0\t%s\n", p.Chromosome, p.Start, p.End, name, i, p.Strand); err != nil {
-			return err
+	for i, peak := range peaks {
+		for _, span := range peak.Spans {
+			if _, err := fmt.Fprintf(w, "%s\t%d\t%d\t%s%d\t0\t%s\n", span.Chromosome, span.Start, span.End, name, i, span.Strand); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -117,7 +155,7 @@ func PrintTop(w io.Writer, g *rlooper.Gene, m *rlooper.EnergyModel, recs []rloop
 
 		var twist, linkingDifference, superhelicity float64
 		if withResiduals {
-			twist, linkingDifference = rlooper.StructureResiduals(m, r)
+			twist, linkingDifference = rlooper.StructureResiduals(m, r.Length(len(g.Sequence)))
 			superhelicity = linkingDifference / (m.N * m.A)
 		}
 

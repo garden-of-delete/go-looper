@@ -53,12 +53,16 @@ func TestValidateMinLength(t *testing.T) {
 	}
 }
 
-func TestValidateCircular(t *testing.T) {
-	if err := validateCircular(false); err != nil {
-		t.Errorf("validateCircular(false) = %v, want nil", err)
+func TestCircularFlagAccepted(t *testing.T) {
+	defer func() { cfg.Circular = false }()
+	rootCmd.SetArgs([]string{"show-config", "--circular"})
+	defer rootCmd.SetArgs(nil)
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Execute with --circular = %v, want nil", err)
 	}
-	if err := validateCircular(true); err == nil {
-		t.Error("validateCircular(true) = nil, want error")
+	if !cfg.Circular {
+		t.Error("cfg.Circular = false after --circular, want true")
 	}
 }
 

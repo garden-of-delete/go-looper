@@ -3,6 +3,9 @@ package sim
 import (
 	"bufio"
 	"bytes"
+	"fmt"
+	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -311,6 +314,278 @@ func TestRunEnsembleSimAgainstGoldenPfc53(t *testing.T) {
 	compareMFEWig(t, ens, readWigValues(t, filepath.Join(dir, "out_mfe.wig")), filepath.Join(goldenDir, "out_mfe.wig"))
 }
 
+func TestResolveDomainSizeExplicitCircularNote(t *testing.T) {
+	n := 1500
+	cfg := &config.Config{SuperhelicityDomain: &n, Circular: true}
+	m := rlooper.NewDefaultModel()
+	var stderr bytes.Buffer
+
+	resolveDomainSize(cfg, m, 200, &stderr)
+
+	if m.N != 1500 {
+		t.Errorf("N = %g, want 1500", m.N)
+	}
+	want := "note: --N 1500 differs from circular sequence length 200\n"
+	if stderr.String() != want {
+		t.Errorf("stderr = %q, want %q", stderr.String(), want)
+	}
+}
+
+func TestResolveDomainSizeExplicitLinearSilent(t *testing.T) {
+	n := 1500
+	cfg := &config.Config{SuperhelicityDomain: &n}
+	m := rlooper.NewDefaultModel()
+	var stderr bytes.Buffer
+
+	resolveDomainSize(cfg, m, 200, &stderr)
+
+	if m.N != 1500 {
+		t.Errorf("N = %g, want 1500", m.N)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr = %q, want empty", stderr.String())
+	}
+}
+
+func TestResolveDomainSizeAutoLinear(t *testing.T) {
+	cfg := &config.Config{AutoDomainSize: true}
+	m := rlooper.NewDefaultModel()
+	var stderr bytes.Buffer
+
+	resolveDomainSize(cfg, m, 200, &stderr)
+
+	if m.N != 200 {
+		t.Errorf("N = %g, want 200", m.N)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr = %q, want empty", stderr.String())
+	}
+}
+
+func TestResolveDomainSizeCircularDefault(t *testing.T) {
+	cfg := &config.Config{Circular: true}
+	m := rlooper.NewDefaultModel()
+	var stderr bytes.Buffer
+
+	resolveDomainSize(cfg, m, 200, &stderr)
+
+	if m.N != 200 {
+		t.Errorf("N = %g, want 200", m.N)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr = %q, want empty", stderr.String())
+	}
+}
+
+func TestRunEnsembleSimCircular(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{
+		InfileName:  "../testdata/fixtures/synthetic200.fa",
+		OutfileName: filepath.Join(dir, "out"),
+		Circular:    true,
+	}
+
+	_, stdout := runEnsembleCase(t, cfg)
+
+	if !strings.Contains(stdout, "processing gene: SYNTH200...39600\n") {
+		t.Fatalf("stdout missing structure count 39600 (= 200*198): %q", stdout)
+	}
+
+	gotBP := readWigValues(t, filepath.Join(dir, "out_bpprob.wig"))
+	if len(gotBP) != 200 {
+		t.Fatalf("bpprob wig length = %d, want 200", len(gotBP))
+	}
+	for i, v := range gotBP {
+		if v <= 0 {
+			t.Fatalf("bpprob[%d] = %g, want > 0 (circular credit should leave no base uncovered)", i, v)
+		}
+	}
+
+	gotMFE := readWigValues(t, filepath.Join(dir, "out_mfe.wig"))
+	if len(gotMFE) != 200 {
+		t.Fatalf("mfe wig length = %d, want 200", len(gotMFE))
+	}
+
+	g := loadOrientedFixture(t)
+	m := ModelFromConfig(cfg)
+	resolveDomainSize(cfg, m, len(g.Sequence), io.Discard)
+	windows := rlooper.Windows{MinLength: minLengthFromConfig(cfg), Circular: true, Workers: e2eWorkers}
+	ens := rlooper.ComputeEnsemble(g.Sequence, m, windows)
+	if ens.NumStructures != 39600 {
+		t.Fatalf("direct ComputeEnsemble structures = %d, want 39600", ens.NumStructures)
+	}
+	wantSig := rlooper.ComputeSignals(g.Sequence, m, windows, ens, false)
+	for i := range gotBP {
+		checkTol(t, gotBP[i], wantSig.BPProb[i])
+	}
+	for i := range gotMFE {
+		checkTol(t, gotMFE[i], wantSig.MFE[i])
+	}
+}
+
+func circularWrappedMFEFixture(t *testing.T) []byte {
+	t.Helper()
+	g := loadOrientedFixture(t)
+	n := len(g.Sequence)
+	m := rlooper.NewDefaultModel()
+	m.SetN(float64(n))
+	w := rlooper.Windows{MinLength: 2, Workers: 1, Circular: true}
+	base := rlooper.ComputeEnsemble(g.Sequence, m, w)
+	all := rlooper.AllStructures(g.Sequence, m, w, base)
+	if all[0].Energy == all[1].Energy {
+		t.Fatal("fixture has tied minimum; rotation MFE mapping requires a unique one")
+	}
+	k := (base.MFE.Start + base.MFE.Length(n)/2) % n
+	rot := make([]byte, n)
+	for i := range rot {
+		rot[i] = g.Sequence[(i+k)%n]
+	}
+	ens := rlooper.ComputeEnsemble(rot, m, w)
+	if ens.MFE.End >= ens.MFE.Start {
+		t.Fatalf("rotation by %d was supposed to wrap the MFE, got %+v", k, ens.MFE)
+	}
+	return rot
+}
+
+func writeCircularFasta(t *testing.T, dir, name string, seq []byte, strand string) string {
+	t.Helper()
+	g := &rlooper.Gene{Sequence: append([]byte(nil), seq...)}
+	switch strand {
+	case "+":
+		g.Complement()
+	case "-":
+		g.Invert()
+	default:
+		t.Fatalf("unsupported strand %q", strand)
+	}
+	n := len(seq)
+	path := filepath.Join(dir, name+".fa")
+	header := fmt.Sprintf(">%s range=chrT:1000-%d 5'pad=0 3'pad=0 strand=%s repeatMasking=none\n", name, 1000+n-1, strand)
+	if err := os.WriteFile(path, []byte(header+string(g.Sequence)+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestRunEnsembleSimCircularAllOutputFlags(t *testing.T) {
+	rotatedSeq := circularWrappedMFEFixture(t)
+	n := len(rotatedSeq)
+
+	for _, strand := range []string{"+", "-"} {
+		t.Run("strand="+strand, func(t *testing.T) {
+			dir := t.TempDir()
+			fastaPath := writeCircularFasta(t, dir, "ROTWRAP", rotatedSeq, strand)
+
+			sensitivity := -1
+			top := 5
+			cfg := &config.Config{
+				InfileName:         fastaPath,
+				OutfileName:        filepath.Join(dir, "out"),
+				Circular:           true,
+				LocalAverageEnergy: true,
+				Dump:               true,
+				Residuals:          true,
+				Bedfile:            true,
+				Sensitivity:        &sensitivity,
+				Top:                &top,
+			}
+
+			var stdout bytes.Buffer
+			if err := RunEnsembleSim(cfg, e2eWorkers, &stdout); err != nil {
+				t.Fatalf("RunEnsembleSim: %v", err)
+			}
+
+			gotBP := readWigValues(t, filepath.Join(dir, "out_bpprob.wig"))
+			if len(gotBP) != n {
+				t.Fatalf("bpprob wig length = %d, want %d", len(gotBP), n)
+			}
+			gotAvg := readWigValues(t, filepath.Join(dir, "out_avgG.wig"))
+			if len(gotAvg) != n {
+				t.Fatalf("avgG wig length = %d, want %d", len(gotAvg), n)
+			}
+			gotMFE := readWigValues(t, filepath.Join(dir, "out_mfe.wig"))
+			if len(gotMFE) != n {
+				t.Fatalf("mfe wig length = %d, want %d", len(gotMFE), n)
+			}
+
+			dumpFile, err := os.Open(filepath.Join(dir, "outROTWRAP_dump.txt"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer dumpFile.Close()
+			dumpRows := parseDump(t, dumpFile)
+			wrappedDumpRows := 0
+			for key := range dumpRows {
+				if key[1] < key[0] {
+					wrappedDumpRows++
+				}
+			}
+			if wrappedDumpRows == 0 {
+				t.Fatal("dump has no wrapped row (stop < start)")
+			}
+
+			if _, err := os.Stat(filepath.Join(dir, "out_bpprob.bed")); err != nil {
+				t.Fatal(err)
+			}
+			bpPeaks := parseBedPeaks(t, filepath.Join(dir, "out_bpprob.bed"))
+			mfePeaks := parseBedPeaks(t, filepath.Join(dir, "out_mfe.bed"))
+			if len(bpPeaks) == 0 && len(mfePeaks) == 0 {
+				t.Fatal("expected at least one bed row across bpprob/mfe peaks")
+			}
+
+			gotTop := parseTopRows(t, strings.NewReader(stdout.String()))
+			if len(gotTop) != top {
+				t.Fatalf("top row count = %d, want %d", len(gotTop), top)
+			}
+			gotResiduals := parseResiduals(t, strings.NewReader(stdout.String()))
+			for k, v := range gotResiduals {
+				if math.IsNaN(v) || math.IsInf(v, 0) {
+					t.Fatalf("ensemble residual %q = %g, want finite", k, v)
+				}
+			}
+
+			var wrappedRow *topRow
+			for i := range gotTop {
+				if gotTop[i].stop < gotTop[i].start {
+					wrappedRow = &gotTop[i]
+					break
+				}
+			}
+			if wrappedRow == nil {
+				t.Fatal("top rows contain no wrapped row (stop < start)")
+			}
+			if math.IsNaN(wrappedRow.twist) || math.IsInf(wrappedRow.twist, 0) ||
+				math.IsNaN(wrappedRow.linkingDifference) || math.IsInf(wrappedRow.linkingDifference, 0) ||
+				math.IsNaN(wrappedRow.superhelicity) || math.IsInf(wrappedRow.superhelicity, 0) {
+				t.Fatalf("wrapped top row residual columns not finite: %+v", wrappedRow)
+			}
+
+			geneStart := int64(1000)
+			geneEnd := geneStart + int64(n) - 1
+			var recStart, recEnd int
+			if strand == "+" {
+				recStart = int(wrappedRow.start - geneStart)
+				recEnd = int(wrappedRow.stop - geneStart)
+			} else {
+				recEnd = int(geneEnd - wrappedRow.start)
+				recStart = int(geneEnd - wrappedRow.stop)
+			}
+			rec := rlooper.StructureRecord{Start: recStart, End: recEnd}
+			if rec.End >= rec.Start {
+				t.Fatalf("reconstructed record is not wrapped: %+v", rec)
+			}
+
+			m := ModelFromConfig(cfg)
+			m.SetN(float64(n))
+			wantTwist, wantLinkingDifference := rlooper.StructureResiduals(m, rec.Length(n))
+			wantSuperhelicity := wantLinkingDifference / (m.N * m.A)
+			checkTol(t, wrappedRow.twist, wantTwist)
+			checkTol(t, wrappedRow.linkingDifference, wantLinkingDifference)
+			checkTol(t, wrappedRow.superhelicity, wantSuperhelicity)
+		})
+	}
+}
+
 func TestModelFromConfigFlags(t *testing.T) {
 	nucleation := 12.5
 	unconstrained := true
@@ -442,8 +717,9 @@ func loadEnsembleForTie(t *testing.T, cfg *config.Config) ensembleTieInfo {
 	reverse := cfg.Reverse != nil && *cfg.Reverse
 	g.ApplyOrientation(complement, reverse, cfg.Invert)
 	minLength := minLengthFromConfig(cfg)
-	ens := rlooper.ComputeEnsemble(g.Sequence, m, minLength, e2eWorkers)
-	recs := rlooper.AllStructures(g.Sequence, m, minLength, ens)
+	w := rlooper.Windows{MinLength: minLength, Workers: e2eWorkers}
+	ens := rlooper.ComputeEnsemble(g.Sequence, m, w)
+	recs := rlooper.AllStructures(g.Sequence, m, w, ens)
 	return ensembleTieInfo{gene: g, recs: recs, mfeEnergy: ens.MFE.Energy}
 }
 

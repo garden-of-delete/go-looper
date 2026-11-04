@@ -95,10 +95,15 @@ func (m *EnergyModel) StepEnergy(b0, b1 byte) float64 {
 	}
 }
 
-func PrefixBPEnergies(seq []byte, m *EnergyModel) []float64 {
-	p := make([]float64, len(seq))
-	for i := 1; i < len(seq); i++ {
-		p[i] = p[i-1] + m.StepEnergy(seq[i-1], seq[i])
+func prefixBP(seq []byte, m *EnergyModel, circular bool) []float64 {
+	n := len(seq)
+	length := n
+	if circular && n > 0 {
+		length = 2*n - 1
+	}
+	p := make([]float64, length)
+	for i := 1; i < length; i++ {
+		p[i] = p[i-1] + m.StepEnergy(seq[(i-1)%n], seq[i%n])
 	}
 	return p
 }
