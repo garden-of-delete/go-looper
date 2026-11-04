@@ -156,8 +156,9 @@ func TestOverflowGuard(t *testing.T) {
 		p.Geometry = GeomClamp
 		p.Temperature = 400
 	})
-	if _, err := Run(m); err == nil {
-		t.Fatal("expected error")
+	_, err := Run(m)
+	if err == nil || !strings.Contains(err.Error(), "melting point") {
+		t.Fatalf("error = %v, want overflow error", err)
 	}
 }
 
@@ -166,8 +167,20 @@ func TestUnderflowGuard(t *testing.T) {
 		p.Geometry = GeomCircular
 		p.Sigma = -0.2
 	})
-	if _, err := Run(m); err == nil {
-		t.Fatal("expected error")
+	_, err := Run(m)
+	if err == nil || !strings.Contains(err.Error(), "underflows") {
+		t.Fatalf("error = %v, want underflow error", err)
+	}
+}
+
+func TestPartialUnderflowGuard(t *testing.T) {
+	m := newTestModel(t, randomSeq(10000, 3), func(p *Params) {
+		p.Geometry = GeomClamp
+		p.Sigma = -0.119
+	})
+	_, err := Run(m)
+	if err == nil || !strings.Contains(err.Error(), "underflows") {
+		t.Fatalf("error = %v, want underflow error", err)
 	}
 }
 

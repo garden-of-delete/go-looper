@@ -72,6 +72,7 @@ func TestFlagValidation(t *testing.T) {
 		{"linear nearest-neighbor", short, []string{"--nearest-neighbor"}, "clamp or circular"},
 		{"multi-record", short + ">t\nACGT\n", []string{"--clamp"}, "exactly one"},
 		{"ambiguous base", ">s\nACGTNACGT\n", []string{"--clamp"}, "position 5"},
+		{"positive sigma", short, []string{"--clamp", "--sigma", "0.06"}, "negative --sigma"},
 		{"bad N", short, []string{"--clamp", "--N", "-3"}, "--N"},
 		{"leading blank line fasta", "\n" + short, []string{"--clamp", "--maxlength", "20"}, ""},
 		{"comment-led fasta", ";note\n" + short, []string{"--clamp", "--maxlength", "20"}, ""},
@@ -106,6 +107,7 @@ func TestEndToEndParityMatrix(t *testing.T) {
 		{"clamp-copoly-alt", "pbr322.toy.fa", []string{"--clamp", "--temperature", "315", "--salt", "0.1", "--sigma", "-0.04", "--threshold", "10"}},
 		{"clamp-copoly-synth", "sidd_synth1600.fa", []string{"--clamp"}},
 		{"circular-nn-synth", "sidd_synth1600.fa", []string{"--circular", "--nearest-neighbor"}},
+		{"circular-nn-alt", "sidd_synth1600.fa", []string{"--circular", "--nearest-neighbor", "--temperature", "300", "--salt", "0.05", "--sigma", "-0.07", "--threshold", "11"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -177,6 +179,28 @@ func TestTracks(t *testing.T) {
 		if strings.Join(lines[3:], "\n") != strings.Join(want, "\n") {
 			t.Fatalf("%s values differ from report table", suffix)
 		}
+	}
+}
+
+func TestOutfile(t *testing.T) {
+	dir := stageFixture(t, "pbr322.toy.fa")
+	want, err := runIn(t, dir, "-f", "pbr322.toy.fa", "--clamp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := runIn(t, dir, "-f", "pbr322.toy.fa", "--clamp", "-o", "report.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stdout != "" {
+		t.Errorf("stdout = %q, want empty with -o", stdout)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "report.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != want {
+		t.Fatalf("outfile differs from stdout report\n%s", firstDiff(want, string(got)))
 	}
 }
 

@@ -2,6 +2,7 @@ package sidd
 
 import (
 	"bytes"
+	"math"
 	"os"
 	"testing"
 )
@@ -28,6 +29,9 @@ func TestFormatSIST(t *testing.T) {
 		{123456.4, "123456"},
 		{1e100, "1e+100"},
 		{2.226931e-60, "2.22693e-60"},
+		{math.NaN(), "nan"},
+		{math.Inf(1), "inf"},
+		{math.Inf(-1), "-inf"},
 	}
 	for _, tt := range tests {
 		if got := FormatSIST(tt.in); got != tt.want {

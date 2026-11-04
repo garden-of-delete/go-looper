@@ -35,6 +35,7 @@ stdout captured and `^Run time` lines removed (wall-clock dependent).
 | `clamp-copoly-alt` | `qsidd -b -p -r -T 315 -i 0.1 -s 0.04 -t 10 -f pbr322.toy.fa` |
 | `clamp-copoly-synth` | `qsidd -b -p -r -f ss_synth1600.fa` |
 | `circular-nn-synth` | `qsidd -b -p -r -c -n -f ss_synth1600.fa` |
+| `circular-nn-alt` | `qsidd -b -p -r -c -n -T 300 -i 0.05 -s 0.07 -t 11 -f sidd_synth1600.fa` |
 
 ## Fixtures
 
@@ -48,3 +49,5 @@ python3 -c "import random; random.seed(1600); s=''.join(random.choice('ACGT') fo
 ## Note 2026-11-04
 
 Resources renamed ss -> sidd: the golden directory (`testdata/golden/ss` -> `testdata/golden/sidd`), the synthetic fixture (`ss_synth1600.fa` -> `sidd_synth1600.fa`, header `>SS_SYNTH1600` -> `>SIDD_SYNTH1600`, sequence bytes untouched), and the script (`scripts/gen-ss-goldens.sh` -> `scripts/gen-sidd-goldens.sh`). The first line of the `clamp-copoly-synth` and `circular-nn-synth` goldens was edited to name the new fixture file. Numeric content is untouched. The provenance above is the original text and still shows the old names.
+
+The `circular-nn-alt` case was added 2026-11-04 (after the rename) and uses the new file names; the original provenance above is unchanged.

@@ -54,13 +54,21 @@ func NewModel(seq []byte, p Params) (*Model, error) {
 	case len(seq) == 0:
 		return nil, errors.New("sidd: empty sequence")
 	case p.MinLen < 1:
-		return nil, fmt.Errorf("sidd: MinLen %d < 1", p.MinLen)
+		return nil, fmt.Errorf("sidd: minimum length %d must be at least 1", p.MinLen)
 	case p.MaxLen < p.MinLen:
-		return nil, fmt.Errorf("sidd: MaxLen %d < MinLen %d", p.MaxLen, p.MinLen)
+		return nil, fmt.Errorf("sidd: maximum length %d is below minimum length %d", p.MaxLen, p.MinLen)
+	case p.MinLen > len(seq):
+		return nil, fmt.Errorf("sidd: minimum length %d exceeds the sequence length %d", p.MinLen, len(seq))
 	case p.NearestNeighbor && p.Geometry == GeomLinear:
 		return nil, errors.New("sidd: nearest-neighbor energetics require clamp or circular geometry")
+	case !isFinite(p.Sigma) || !isFinite(p.Temperature) || !isFinite(p.Salt) || !isFinite(p.Threshold):
+		return nil, errors.New("sidd: sigma, temperature, salt and threshold must be finite numbers")
 	case p.Salt <= 0 || p.Temperature <= 0:
 		return nil, errors.New("sidd: salt and temperature must be positive")
+	case p.Threshold < 0:
+		return nil, fmt.Errorf("sidd: threshold %v must not be negative", p.Threshold)
+	case p.Sigma > 0:
+		return nil, fmt.Errorf("sidd: positive sigma %v (positive supercoiling) is not supported; SIST's positive-magnitude -s convention corresponds to a negative --sigma here", p.Sigma)
 	}
 	for i, b := range seq {
 		if baseCode[b] == 0 {
@@ -77,7 +85,10 @@ func NewModel(seq []byte, p Params) (*Model, error) {
 		}
 	}
 	if p.Geometry != GeomLinear && p.MaxLen >= m.EngLen {
-		return nil, fmt.Errorf("sidd: MaxLen %d must be < engine length %d", p.MaxLen, m.EngLen)
+		return nil, fmt.Errorf("sidd: maximum length %d must be below the sequence length %d (plus %d clamp bases for clamp geometry)", p.MaxLen, len(seq), m.EngLen-len(seq))
+	}
+	if p.Geometry == GeomLinear {
+		m.MaxLen = min(p.MaxLen, m.SeqLen)
 	}
 
 	m.N = p.N

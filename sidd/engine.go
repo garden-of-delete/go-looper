@@ -12,7 +12,6 @@ type Result struct {
 	OneRunStates   int
 	ZB, ZG         float64
 	GroundW        float64
-	AvgRuns        float64
 	TransitionProb float64
 	MeltedBases    float64
 	P, G           []float64
@@ -68,9 +67,27 @@ func forEachRetained(m *Model, lists [][]candidate, minE float64, visit func(s, 
 	}
 }
 
+func isFinite(x float64) bool {
+	return !math.IsNaN(x) && !math.IsInf(x, 0)
+}
+
+func checkRepresentable(m *Model, minE float64) error {
+	peak := -minE/m.RT + Shift
+	switch {
+	case peak < math.Log(2.2250738585072014e-308):
+		return fmt.Errorf("sidd: minimum state energy %.6g kcal/mol: every Boltzmann weight underflows or loses precision at these parameters; the sequence is too long or sigma too negative for a single-domain calculation (SIST recommends 1,500-10,000 bp)", minE)
+	case peak > math.Log(math.MaxFloat64):
+		return fmt.Errorf("sidd: minimum state energy %.6g kcal/mol: window energies are negative enough to overflow the Boltzmann weights; the temperature is at or above the duplex melting point for this salt concentration", minE)
+	}
+	return nil
+}
+
 func Run(m *Model) (*Result, error) {
 	lists := candidates(m)
 	minE := minimumEnergy(m, lists)
+	if err := checkRepresentable(m, minE); err != nil {
+		return nil, err
+	}
 	res := &Result{MinE: minE, MaxE: minE + m.Threshold}
 
 	cells := newCellMatrix(m)
@@ -86,11 +103,10 @@ func Run(m *Model) (*Result, error) {
 	res.ZB = sumB + res.GroundW
 	res.ZG = sumG + float64(m.Alpha*m.Alpha*m.K/2*res.GroundW)
 
-	if res.ZB == 0 || math.IsNaN(res.ZB) || math.IsInf(res.ZB, 0) {
-		return nil, fmt.Errorf("sidd: partition function %v is not representable; adjust the shift or parameters", res.ZB)
+	if res.ZB == 0 || !isFinite(res.ZB) || !isFinite(res.ZG) {
+		return nil, fmt.Errorf("sidd: partition function (ZB %v, ZG %v) is not representable at these parameters; shorten the sequence or use a less negative sigma", res.ZB, res.ZG)
 	}
-	res.AvgRuns = sumB / res.ZB
-	res.TransitionProb = (res.ZB - res.GroundW) / res.ZB
+	res.TransitionProb = sumB / res.ZB
 	cells.accumulate(m).finish(m, res.ZB, res.ZG, res)
 	return res, nil
 }

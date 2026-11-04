@@ -96,6 +96,7 @@ run_case circular-nn-defaults "$TOY_FA" -c -n
 run_case clamp-copoly-alt "$TOY_FA" -T 315 -i 0.1 -s 0.04 -t 10
 run_case clamp-copoly-synth "$SYNTH_FA"
 run_case circular-nn-synth "$SYNTH_FA" -c -n
+run_case circular-nn-alt "$SYNTH_FA" -c -n -T 300 -i 0.05 -s 0.07 -t 11
 
 echo "--- verifying goldens ---"
 verify_case clamp-copoly-defaults 4361
@@ -105,6 +106,7 @@ verify_case circular-nn-defaults 4361
 verify_case clamp-copoly-alt 4361
 verify_case clamp-copoly-synth 1600
 verify_case circular-nn-synth 1600
+verify_case circular-nn-alt 1600
 
 echo "--- writing README ---"
 PATCH_SHA="$(shasum -a 256 "$PATCH_FILE" | cut -d' ' -f1)"
@@ -147,6 +149,7 @@ stdout captured and \`^Run time\` lines removed (wall-clock dependent).
 | \`clamp-copoly-alt\` | \`qsidd -b -p -r -T 315 -i 0.1 -s 0.04 -t 10 -f pbr322.toy.fa\` |
 | \`clamp-copoly-synth\` | \`qsidd -b -p -r -f sidd_synth1600.fa\` |
 | \`circular-nn-synth\` | \`qsidd -b -p -r -c -n -f sidd_synth1600.fa\` |
+| \`circular-nn-alt\` | \`qsidd -b -p -r -c -n -T 300 -i 0.05 -s 0.07 -t 11 -f sidd_synth1600.fa\` |
 
 ## Fixtures
 

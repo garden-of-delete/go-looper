@@ -105,13 +105,20 @@ func TestModelCircularGeometry(t *testing.T) {
 func TestModelValidation(t *testing.T) {
 	seq := []byte("ACGTACGTAC")
 	cases := map[string]func(*Params) []byte{
-		"linear NN":  func(p *Params) []byte { p.NearestNeighbor = true; return seq },
-		"empty":      func(p *Params) []byte { return nil },
-		"min zero":   func(p *Params) []byte { p.MinLen = 0; return seq },
-		"max<min":    func(p *Params) []byte { p.MinLen, p.MaxLen = 5, 4; return seq },
-		"negative N": func(p *Params) []byte { p.N = -1; return seq },
-		"bad base":   func(p *Params) []byte { return []byte("ACGX") },
-		"clamp max":  func(p *Params) []byte { p.Geometry = GeomClamp; p.MaxLen = 60; return seq },
+		"linear NN":            func(p *Params) []byte { p.NearestNeighbor = true; return seq },
+		"empty":                func(p *Params) []byte { return nil },
+		"min zero":             func(p *Params) []byte { p.MinLen = 0; return seq },
+		"max<min":              func(p *Params) []byte { p.MinLen, p.MaxLen = 5, 4; return seq },
+		"negative N":           func(p *Params) []byte { p.N = -1; return seq },
+		"bad base":             func(p *Params) []byte { return []byte("ACGX") },
+		"clamp max":            func(p *Params) []byte { p.Geometry = GeomClamp; p.MaxLen = 60; return seq },
+		"positive sigma":       func(p *Params) []byte { p.Sigma = 0.06; return seq },
+		"NaN sigma":            func(p *Params) []byte { p.Sigma = math.NaN(); return seq },
+		"infinite temperature": func(p *Params) []byte { p.Temperature = math.Inf(1); return seq },
+		"NaN salt":             func(p *Params) []byte { p.Salt = math.NaN(); return seq },
+		"infinite threshold":   func(p *Params) []byte { p.Threshold = math.Inf(1); return seq },
+		"negative threshold":   func(p *Params) []byte { p.Threshold = -1; return seq },
+		"min>seq":              func(p *Params) []byte { p.MinLen, p.MaxLen = 11, 20; return seq },
 	}
 	for name, mutate := range cases {
 		p := DefaultParams()
@@ -189,5 +196,35 @@ func TestModelNearestNeighbor(t *testing.T) {
 	}
 	if got := m.WindowEnergy(10, 4); got != sum {
 		t.Errorf("wrapped NN window = %v, want %v", got, sum)
+	}
+}
+
+func TestModelPositiveSigmaMessage(t *testing.T) {
+	p := DefaultParams()
+	p.Sigma = 0.06
+	_, err := NewModel([]byte("ACGTACGTAC"), p)
+	if err == nil || !strings.Contains(err.Error(), "negative --sigma") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestModelLinearMaxLenCap(t *testing.T) {
+	seq := randomSeq(400, 4)
+	p := DefaultParams()
+	p.Geometry = GeomLinear
+	p.MaxLen = 1000000
+	m, err := NewModel(seq, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.MaxLen != len(seq) {
+		t.Errorf("MaxLen = %d, want %d", m.MaxLen, len(seq))
+	}
+	res, err := Run(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.P) != len(seq) {
+		t.Errorf("len(P) = %d, want %d", len(res.P), len(seq))
 	}
 }
