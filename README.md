@@ -7,7 +7,7 @@ golooper predicts where R-loops are thermodynamically favored in a DNA sequence.
 
 ## Install
 
-Requires Go 1.22.1 or later.
+Requires Go 1.22.1 or later to compile from source. 
 
 ```
 go build -o golooper        # or: make build
@@ -82,7 +82,7 @@ FASTA with UCSC-style headers; only `range=` and `strand=` are parsed, and coord
 >NAME range=CHROM:START-END 5'pad=0 3'pad=0 strand=- repeatMasking=none
 ```
 
-Only `A`/`C`/`G`/`T` (case-insensitive) are accepted; anything else, including `N`, is rejected.
+Only `A`/`C`/`G`/`T` (case-insensitive) are accepted.
 
 ## Circular mode
 
@@ -92,6 +92,6 @@ Reading circular output: a `--dump`/`--top` row with `stop < start` is a structu
 
 ## Validation and performance
 
-Every linear-mode output is validated against a patched build of the original C++ rlooper2 (commit `455983b`) within `max(1e-9, 1e-5·|reference|)`; goldens live in `testdata/golden/` and regenerate via `scripts/gen-golden.sh`. Circular mode is new in this port (the C++ implementation was non-functional) and is validated by independent enumeration, rotation invariance, and analytic properties instead. Deliberately preserved rlooper2 quirks and the four documented departures from it are catalogued in `docs/rlooper2-analysis.md` and `docs/superpowers/specs/2026-11-03-circular-mode-design.md`.
+Every linear-mode output is validated against a patched build of the original C++ rlooper2 (commit `455983b`) within `max(1e-9, 1e-5·|reference|)`; goldens live in `testdata/golden/` and regenerate via `scripts/gen-golden.sh`. Circular mode is validated by independent enumeration, rotation invariance, and analytic properties. Several rlooper2 output behaviors are preserved deliberately for compatibility (the peak-threshold default and last-base signal convention among them), and a small number of behaviors depart from it where the original was internally inconsistent — exact energy ties resolve deterministically to the lowest-start window, and `--top` and `--dump` coordinates always agree.
 
 The ensemble is O(n²) in sequence length and parallelizes across `--threads`: a 3,906 bp sequence takes ~20 ms at 8 workers (~4× over serial). `--circular` roughly doubles window count, runtime, and `--dump` size.
