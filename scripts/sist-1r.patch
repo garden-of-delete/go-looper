@@ -1,0 +1,17 @@
+--- a/qsidd.cpp
++++ b/qsidd.cpp
+@@ -233,11 +233,11 @@
+                         // cout << "AAAA2"<< endl;
+   sidd.Search_Low1RE(); // searching for one-run states and now storing info
+                         // cout << "AAAA3"<< endl;
+-  sidd.Search_Low2RE(); // searching states for two-run
++//  sidd.Search_Low2RE(); // searching states for two-run
+                         // cout << "AAAA4"<< endl;
+-  sidd.Search_Low3RE(); // searching states for three-run
++//  sidd.Search_Low3RE(); // searching states for three-run
+                         // cout << "AAAA5"<< endl;
+-  sidd.Search_Low4RE(); // searching states for four-run
++//  sidd.Search_Low4RE(); // searching states for four-run
+                         // cout << "AAAA6"<< endl;
+   sidd.fill_profile();  // computing profile
+                         // cout << "AAAA7"<< endl;

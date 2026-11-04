@@ -9,11 +9,12 @@ OUT_DIR=out
 .PHONY: build
 build: clean
 	go build -o golooper
+	go build -o golooper-sidd ./cmd/golooper-sidd
 
 # Clean target
 .PHONY: clean
 clean:
-		rm -f $(BINARY_DIR)
+		rm -f $(BINARY_DIR) golooper-sidd
 	rm -rf $(TEST_OUTPUT_DIR)
 	rm -rf $(OUT_DIR)
 

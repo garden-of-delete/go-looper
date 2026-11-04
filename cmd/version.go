@@ -11,7 +11,7 @@ var versionCmd = &cobra.Command{
 	Short: "Print the version number of Looper",
 	Long:  `All software has versions. This is Looper's`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("golooper v0.3.0")
+		fmt.Println("golooper v0.4.0")
 	},
 }
 
