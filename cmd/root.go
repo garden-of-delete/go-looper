@@ -77,11 +77,7 @@ for running biophysical simulations on nucleic acid energetics with an emphasis 
 				cfg.Top = &top
 			}
 		})
-		if flagErr != nil {
-			return flagErr
-		}
-
-		return validateCircular(cfg.Circular)
+		return flagErr
 	},
 }
 
@@ -99,13 +95,6 @@ func parseSuperhelicityDomain(s string) (auto bool, value int, err error) {
 func validateMinLength(n int) error {
 	if n < 2 {
 		return fmt.Errorf("--minlength must be at least 2, got %d", n)
-	}
-	return nil
-}
-
-func validateCircular(circular bool) error {
-	if circular {
-		return fmt.Errorf("circular mode is not implemented; sequences are treated as linear")
 	}
 	return nil
 }

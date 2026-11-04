@@ -55,7 +55,7 @@ func TestPrefixMatchesNaive(t *testing.T) {
 	for i := range seq {
 		seq[i] = "ACGT"[r.Intn(4)]
 	}
-	p := PrefixBPEnergies(seq, m)
+	p := prefixBP(seq, m, false)
 	for s := 0; s < len(seq); s++ {
 		for e := s + 1; e < len(seq); e++ {
 			var naive float64

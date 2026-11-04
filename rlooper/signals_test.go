@@ -66,7 +66,7 @@ func compareMFEWig(t *testing.T, seq []byte, m *EnergyModel, ens EnsembleResult,
 	if start == ens.MFE.Start && end == ens.MFE.End {
 		return
 	}
-	checkTol(t, windowEnergy(m, PrefixBPEnergies(seq, m), start, end), ens.MFE.Energy)
+	checkTol(t, windowEnergy(m, prefixBP(seq, m, false), start, end-start+1), ens.MFE.Energy)
 	t.Logf("%s: tied MFE, C++ chose window (%d,%d), Go chose (%d,%d)", path, start, end, ens.MFE.Start, ens.MFE.End)
 }
 
@@ -91,8 +91,9 @@ func onesSpan(t *testing.T, signal []float64) (start, end int) {
 func TestSignalsAgainstGoldenWigDefaults(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
-	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
-	sig := ComputeSignals(g.Sequence, m, 2, ens, true, 1)
+	w := Windows{MinLength: 2, Workers: 1}
+	ens := ComputeEnsemble(g.Sequence, m, w)
+	sig := ComputeSignals(g.Sequence, m, w, ens, true)
 	compareWig(t, sig.BPProb, "../testdata/golden/defaults/out_bpprob.wig")
 	compareWig(t, sig.AvgG, "../testdata/golden/defaults/out_avgG.wig")
 	compareMFEWig(t, g.Sequence, m, ens, sig.MFE, "../testdata/golden/defaults/out_mfe.wig")
@@ -102,8 +103,9 @@ func TestSignalsAgainstGoldenWigSigma010(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
 	m.SetSigma(-0.10)
-	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
-	sig := ComputeSignals(g.Sequence, m, 2, ens, false, 1)
+	w := Windows{MinLength: 2, Workers: 1}
+	ens := ComputeEnsemble(g.Sequence, m, w)
+	sig := ComputeSignals(g.Sequence, m, w, ens, false)
 	compareWig(t, sig.BPProb, "../testdata/golden/sigma010/out_bpprob.wig")
 	compareMFEWig(t, g.Sequence, m, ens, sig.MFE, "../testdata/golden/sigma010/out_mfe.wig")
 }
@@ -112,8 +114,9 @@ func TestSignalsAgainstGoldenWigNauto(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
 	m.SetN(200)
-	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
-	sig := ComputeSignals(g.Sequence, m, 2, ens, false, 1)
+	w := Windows{MinLength: 2, Workers: 1}
+	ens := ComputeEnsemble(g.Sequence, m, w)
+	sig := ComputeSignals(g.Sequence, m, w, ens, false)
 	compareWig(t, sig.BPProb, "../testdata/golden/nauto/out_bpprob.wig")
 	compareMFEWig(t, g.Sequence, m, ens, sig.MFE, "../testdata/golden/nauto/out_mfe.wig")
 }
@@ -122,8 +125,9 @@ func TestSignalsAgainstGoldenWigHomopolymer05(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
 	m.Homopolymer, m.OverrideEnergy = true, 0.5
-	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
-	sig := ComputeSignals(g.Sequence, m, 2, ens, false, 1)
+	w := Windows{MinLength: 2, Workers: 1}
+	ens := ComputeEnsemble(g.Sequence, m, w)
+	sig := ComputeSignals(g.Sequence, m, w, ens, false)
 	compareWig(t, sig.BPProb, "../testdata/golden/homopolymer05/out_bpprob.wig")
 	compareMFEWig(t, g.Sequence, m, ens, sig.MFE, "../testdata/golden/homopolymer05/out_mfe.wig")
 }
@@ -131,17 +135,18 @@ func TestSignalsAgainstGoldenWigHomopolymer05(t *testing.T) {
 func TestSignalsAgainstNaiveDirectSum(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("GATTACA")
-	ens := ComputeEnsemble(seq, m, 2, 1)
-	sig := ComputeSignals(seq, m, 2, ens, true, 1)
+	w := Windows{MinLength: 2, Workers: 1}
+	ens := ComputeEnsemble(seq, m, w)
+	sig := ComputeSignals(seq, m, w, ens, true)
 
-	p := PrefixBPEnergies(seq, m)
+	p := prefixBP(seq, m, false)
 	rt := m.RT()
 	wantBP := make([]float64, len(seq))
 	wantNum := make([]float64, len(seq))
 	wantDen := make([]float64, len(seq))
 	for s := 0; s < len(seq); s++ {
 		for e := s + 1; e < len(seq); e++ {
-			g := windowEnergy(m, p, s, e)
+			g := windowEnergy(m, p, s, e-s+1)
 			prob := math.Exp(-g/rt - ens.LogZ)
 			for i := s; i < e; i++ {
 				wantBP[i] += prob
@@ -175,8 +180,9 @@ func loadPfc53Fixture(t *testing.T) *Gene {
 func TestSignalsPfc53NoNegativeBPProb(t *testing.T) {
 	g := loadPfc53Fixture(t)
 	m := NewDefaultModel()
-	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
-	sig := ComputeSignals(g.Sequence, m, 2, ens, true, 1)
+	w := Windows{MinLength: 2, Workers: 1}
+	ens := ComputeEnsemble(g.Sequence, m, w)
+	sig := ComputeSignals(g.Sequence, m, w, ens, true)
 
 	n := len(sig.BPProb)
 	if sig.BPProb[n-1] != 0 {
@@ -195,8 +201,9 @@ func TestSignalsPfc53NoNegativeBPProb(t *testing.T) {
 func TestSignalsZeroStructures(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("ACGT")
-	ens := ComputeEnsemble(seq, m, 10, 1)
-	sig := ComputeSignals(seq, m, 10, ens, true, 1)
+	w := Windows{MinLength: 10, Workers: 1}
+	ens := ComputeEnsemble(seq, m, w)
+	sig := ComputeSignals(seq, m, w, ens, true)
 	for i, v := range sig.BPProb {
 		if v != 0 {
 			t.Fatalf("BPProb[%d] = %g, want 0", i, v)
@@ -217,8 +224,9 @@ func TestSignalsZeroStructures(t *testing.T) {
 func TestComputeResidualsAgainstGolden(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
-	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
-	res := ComputeResiduals(g.Sequence, m, 2, ens, 1)
+	w := Windows{MinLength: 2, Workers: 1}
+	ens := ComputeEnsemble(g.Sequence, m, w)
+	res := ComputeResiduals(g.Sequence, m, w, ens)
 	want := parseResidualsGolden(t, "../testdata/golden/defaults/stdout.txt")
 	checkTol(t, res.Twist, want["ensemble_residual_twist"])
 	checkTol(t, res.LinkingDifference, want["ensemble_residual_linking_difference"])
@@ -230,8 +238,9 @@ func TestComputeResidualsAgainstGolden(t *testing.T) {
 func TestComputeResidualsZeroStructures(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("ACGT")
-	ens := ComputeEnsemble(seq, m, 10, 1)
-	res := ComputeResiduals(seq, m, 10, ens, 1)
+	w := Windows{MinLength: 10, Workers: 1}
+	ens := ComputeEnsemble(seq, m, w)
+	res := ComputeResiduals(seq, m, w, ens)
 	wantTwist := m.K * m.C * m.Alpha / (2 * math.Pi)
 	if res.Twist != wantTwist {
 		t.Fatalf("Twist = %g, want %g", res.Twist, wantTwist)

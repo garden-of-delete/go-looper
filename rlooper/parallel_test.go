@@ -73,18 +73,30 @@ func assertResidualsEquivalent(t *testing.T, p, s Residuals) {
 func TestParallelMatchesSerial(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
-	s := ComputeEnsemble(g.Sequence, m, 2, 1)
-	p := ComputeEnsemble(g.Sequence, m, 2, 8)
+	s := ComputeEnsemble(g.Sequence, m, Windows{MinLength: 2, Workers: 1})
+	p := ComputeEnsemble(g.Sequence, m, Windows{MinLength: 2, Workers: 8})
 	assertEnsembleEquivalent(t, p, s)
 
-	ss := ComputeSignals(g.Sequence, m, 2, s, true, 1)
-	ps := ComputeSignals(g.Sequence, m, 2, s, true, 8)
+	ss := ComputeSignals(g.Sequence, m, Windows{MinLength: 2, Workers: 1}, s, true)
+	ps := ComputeSignals(g.Sequence, m, Windows{MinLength: 2, Workers: 8}, s, true)
+	assertSignalsEquivalent(t, ps, ss)
+}
+
+func TestCircularParallelMatchesSerial(t *testing.T) {
+	g := loadOrientedFixture(t)
+	m := NewDefaultModel()
+	s := ComputeEnsemble(g.Sequence, m, Windows{MinLength: 2, Workers: 1, Circular: true})
+	p := ComputeEnsemble(g.Sequence, m, Windows{MinLength: 2, Workers: 8, Circular: true})
+	assertEnsembleEquivalent(t, p, s)
+
+	ss := ComputeSignals(g.Sequence, m, Windows{MinLength: 2, Workers: 1, Circular: true}, s, true)
+	ps := ComputeSignals(g.Sequence, m, Windows{MinLength: 2, Workers: 8, Circular: true}, s, true)
 	assertSignalsEquivalent(t, ps, ss)
 }
 
 func TestParallelMoreWorkersThanRows(t *testing.T) {
 	m := NewDefaultModel()
-	ens := ComputeEnsemble([]byte("GATTACA"), m, 2, 64)
+	ens := ComputeEnsemble([]byte("GATTACA"), m, Windows{MinLength: 2, Workers: 64})
 	if ens.NumStructures != 21 {
 		t.Fatalf("count=%d", ens.NumStructures)
 	}
@@ -93,15 +105,30 @@ func TestParallelMoreWorkersThanRows(t *testing.T) {
 func TestParallelEmptyChunks(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("AAAAAAAAAA")
-	s := ComputeEnsemble(seq, m, 8, 1)
+	s := ComputeEnsemble(seq, m, Windows{MinLength: 8, Workers: 1})
 	if s.NumStructures != 6 {
 		t.Fatalf("setup: NumStructures = %d, want 6", s.NumStructures)
 	}
-	p := ComputeEnsemble(seq, m, 8, 8)
+	p := ComputeEnsemble(seq, m, Windows{MinLength: 8, Workers: 8})
 	assertEnsembleEquivalent(t, p, s)
 
-	ss := ComputeSignals(seq, m, 8, s, true, 1)
-	ps := ComputeSignals(seq, m, 8, s, true, 8)
+	ss := ComputeSignals(seq, m, Windows{MinLength: 8, Workers: 1}, s, true)
+	ps := ComputeSignals(seq, m, Windows{MinLength: 8, Workers: 8}, s, true)
+	assertSignalsEquivalent(t, ps, ss)
+}
+
+func TestCircularParallelEmptyChunks(t *testing.T) {
+	m := NewDefaultModel()
+	seq := []byte("AAAAAAAAAA")
+	s := ComputeEnsemble(seq, m, Windows{MinLength: 8, Workers: 1, Circular: true})
+	if s.NumStructures != 20 {
+		t.Fatalf("setup: NumStructures = %d, want 20", s.NumStructures)
+	}
+	p := ComputeEnsemble(seq, m, Windows{MinLength: 8, Workers: 8, Circular: true})
+	assertEnsembleEquivalent(t, p, s)
+
+	ss := ComputeSignals(seq, m, Windows{MinLength: 8, Workers: 1, Circular: true}, s, true)
+	ps := ComputeSignals(seq, m, Windows{MinLength: 8, Workers: 8, Circular: true}, s, true)
 	assertSignalsEquivalent(t, ps, ss)
 }
 
@@ -109,11 +136,38 @@ func TestParallelDeterministic(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
 
-	e1 := ComputeEnsemble(g.Sequence, m, 2, 4)
-	s1 := ComputeSignals(g.Sequence, m, 2, e1, true, 4)
+	e1 := ComputeEnsemble(g.Sequence, m, Windows{MinLength: 2, Workers: 4})
+	s1 := ComputeSignals(g.Sequence, m, Windows{MinLength: 2, Workers: 4}, e1, true)
 
-	e2 := ComputeEnsemble(g.Sequence, m, 2, 4)
-	s2 := ComputeSignals(g.Sequence, m, 2, e2, true, 4)
+	e2 := ComputeEnsemble(g.Sequence, m, Windows{MinLength: 2, Workers: 4})
+	s2 := ComputeSignals(g.Sequence, m, Windows{MinLength: 2, Workers: 4}, e2, true)
+
+	if e1.LogZ != e2.LogZ {
+		t.Fatalf("LogZ not deterministic: %v vs %v", e1.LogZ, e2.LogZ)
+	}
+	if e1.MFE != e2.MFE {
+		t.Fatalf("MFE not deterministic: %+v vs %+v", e1.MFE, e2.MFE)
+	}
+	if !slices.Equal(s1.BPProb, s2.BPProb) {
+		t.Fatalf("BPProb not deterministic")
+	}
+	if !slices.Equal(s1.AvgG, s2.AvgG) {
+		t.Fatalf("AvgG not deterministic")
+	}
+	if !slices.Equal(s1.MFE, s2.MFE) {
+		t.Fatalf("MFE signal not deterministic")
+	}
+}
+
+func TestCircularParallelDeterministic(t *testing.T) {
+	g := loadOrientedFixture(t)
+	m := NewDefaultModel()
+
+	e1 := ComputeEnsemble(g.Sequence, m, Windows{MinLength: 2, Workers: 4, Circular: true})
+	s1 := ComputeSignals(g.Sequence, m, Windows{MinLength: 2, Workers: 4, Circular: true}, e1, true)
+
+	e2 := ComputeEnsemble(g.Sequence, m, Windows{MinLength: 2, Workers: 4, Circular: true})
+	s2 := ComputeSignals(g.Sequence, m, Windows{MinLength: 2, Workers: 4, Circular: true}, e2, true)
 
 	if e1.LogZ != e2.LogZ {
 		t.Fatalf("LogZ not deterministic: %v vs %v", e1.LogZ, e2.LogZ)
@@ -137,8 +191,8 @@ func TestParallelMFETieBreakMatchesSerial(t *testing.T) {
 	m.Homopolymer, m.OverrideEnergy = true, 0.5
 	seq := bytes.Repeat([]byte("A"), 150)
 
-	serial := ComputeEnsemble(seq, m, 2, 1)
-	parallel := ComputeEnsemble(seq, m, 2, 8)
+	serial := ComputeEnsemble(seq, m, Windows{MinLength: 2, Workers: 1})
+	parallel := ComputeEnsemble(seq, m, Windows{MinLength: 2, Workers: 8})
 
 	assertEnsembleEquivalent(t, parallel, serial)
 }
@@ -146,19 +200,42 @@ func TestParallelMFETieBreakMatchesSerial(t *testing.T) {
 func TestParallelResidualsMatchesSerial(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
-	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
-	s := ComputeResiduals(g.Sequence, m, 2, ens, 1)
-	p := ComputeResiduals(g.Sequence, m, 2, ens, 8)
+	w := Windows{MinLength: 2, Workers: 1}
+	ens := ComputeEnsemble(g.Sequence, m, w)
+	s := ComputeResiduals(g.Sequence, m, w, ens)
+	p := ComputeResiduals(g.Sequence, m, Windows{MinLength: 2, Workers: 8}, ens)
 	assertResidualsEquivalent(t, p, s)
+}
+
+func TestCircularResidualsMatchesSerial(t *testing.T) {
+	g := loadOrientedFixture(t)
+	m := NewDefaultModel()
+	w := Windows{MinLength: 2, Workers: 1, Circular: true}
+	ens := ComputeEnsemble(g.Sequence, m, w)
+	s := ComputeResiduals(g.Sequence, m, w, ens)
+	p := ComputeResiduals(g.Sequence, m, Windows{MinLength: 2, Workers: 8, Circular: true}, ens)
+	assertResidualsEquivalent(t, p, s)
+
+	linW := Windows{MinLength: 2, Workers: 1}
+	lin := ComputeResiduals(g.Sequence, m, linW, ComputeEnsemble(g.Sequence, m, linW))
+	differs := relOrAbs(s.Twist, lin.Twist) > 1e-9 ||
+		relOrAbs(s.LinkingDifference, lin.LinkingDifference) > 1e-9 ||
+		relOrAbs(s.Superhelicity, lin.Superhelicity) > 1e-9 ||
+		relOrAbs(s.WrappingAbsorption, lin.WrappingAbsorption) > 1e-9 ||
+		relOrAbs(s.StrandSeparation, lin.StrandSeparation) > 1e-9
+	if !differs {
+		t.Fatalf("circular residuals identical to linear residuals; circular bounds may not have engaged: %+v vs %+v", s, lin)
+	}
 }
 
 func TestParallelResidualsDeterministic(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
-	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
+	w := Windows{MinLength: 2, Workers: 1}
+	ens := ComputeEnsemble(g.Sequence, m, w)
 
-	r1 := ComputeResiduals(g.Sequence, m, 2, ens, 4)
-	r2 := ComputeResiduals(g.Sequence, m, 2, ens, 4)
+	r1 := ComputeResiduals(g.Sequence, m, Windows{MinLength: 2, Workers: 4}, ens)
+	r2 := ComputeResiduals(g.Sequence, m, Windows{MinLength: 2, Workers: 4}, ens)
 
 	if r1 != r2 {
 		t.Fatalf("Residuals not deterministic: %+v vs %+v", r1, r2)
@@ -168,9 +245,10 @@ func TestParallelResidualsDeterministic(t *testing.T) {
 func TestParallelResidualsOversubscription(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("GATTACA")
-	ens := ComputeEnsemble(seq, m, 2, 1)
-	s := ComputeResiduals(seq, m, 2, ens, 1)
-	p := ComputeResiduals(seq, m, 2, ens, 64)
+	w := Windows{MinLength: 2, Workers: 1}
+	ens := ComputeEnsemble(seq, m, w)
+	s := ComputeResiduals(seq, m, w, ens)
+	p := ComputeResiduals(seq, m, Windows{MinLength: 2, Workers: 64}, ens)
 	assertResidualsEquivalent(t, p, s)
 }
 
@@ -196,7 +274,7 @@ func BenchmarkEnsemblePfc53(b *testing.B) {
 	for _, workers := range []int{1, runtime.NumCPU()} {
 		b.Run(fmt.Sprintf("workers=%d", workers), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				ComputeEnsemble(g.Sequence, m, 2, workers)
+				ComputeEnsemble(g.Sequence, m, Windows{MinLength: 2, Workers: workers})
 			}
 		})
 	}
@@ -205,11 +283,11 @@ func BenchmarkEnsemblePfc53(b *testing.B) {
 func BenchmarkSignalsPfc53(b *testing.B) {
 	g := loadPfc53ForBench(b)
 	m := NewDefaultModel()
-	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
+	ens := ComputeEnsemble(g.Sequence, m, Windows{MinLength: 2, Workers: 1})
 	for _, workers := range []int{1, runtime.NumCPU()} {
 		b.Run(fmt.Sprintf("workers=%d", workers), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				ComputeSignals(g.Sequence, m, 2, ens, true, workers)
+				ComputeSignals(g.Sequence, m, Windows{MinLength: 2, Workers: workers}, ens, true)
 			}
 		})
 	}

@@ -66,8 +66,29 @@ func compareStructures(a, b StructureRecord) int {
 	)
 }
 
-func windowEnergy(m *EnergyModel, p []float64, s, e int) float64 {
-	return m.SupercoilingEnergy(e-s+1) + (p[e] - p[s])
+func windowEnergy(m *EnergyModel, p []float64, s, mLen int) float64 {
+	return m.SupercoilingEnergy(mLen) + (p[s+mLen-1] - p[s])
+}
+
+type Windows struct {
+	MinLength int
+	Circular  bool
+	Workers   int
+}
+
+func maxLen(n, s int, circular bool) int {
+	if circular {
+		return n - 1
+	}
+	return n - s
+}
+
+func windowEnd(s, mLen, n int, circular bool) int {
+	e := s + mLen - 1
+	if circular {
+		e %= n
+	}
+	return e
 }
 
 func clampWorkers(workers, rows int) int {
@@ -107,17 +128,17 @@ func (a *ensembleAccum) merge(o ensembleAccum) {
 	a.count += o.count
 }
 
-func ComputeEnsemble(seq []byte, m *EnergyModel, minLength, workers int) EnsembleResult {
-	p := PrefixBPEnergies(seq, m)
+func ComputeEnsemble(seq []byte, m *EnergyModel, w Windows) EnsembleResult {
+	p := prefixBP(seq, m, w.Circular)
 	rt := m.RT()
 	n := len(seq)
-	workers = clampWorkers(workers, n)
+	workers := clampWorkers(w.Workers, n)
 
 	acc := newEnsembleAccum()
 	if workers <= 1 {
 		for s := 0; s < n; s++ {
-			for e := s + minLength - 1; e < n; e++ {
-				acc.addWindow(s, e, windowEnergy(m, p, s, e), rt)
+			for mLen := w.MinLength; mLen <= maxLen(n, s, w.Circular); mLen++ {
+				acc.addWindow(s, windowEnd(s, mLen, n, w.Circular), windowEnergy(m, p, s, mLen), rt)
 			}
 		}
 	} else {
@@ -129,8 +150,8 @@ func ComputeEnsemble(seq []byte, m *EnergyModel, minLength, workers int) Ensembl
 				defer wg.Done()
 				chunk := newEnsembleAccum()
 				for s := c; s < n; s += workers {
-					for e := s + minLength - 1; e < n; e++ {
-						chunk.addWindow(s, e, windowEnergy(m, p, s, e), rt)
+					for mLen := w.MinLength; mLen <= maxLen(n, s, w.Circular); mLen++ {
+						chunk.addWindow(s, windowEnd(s, mLen, n, w.Circular), windowEnergy(m, p, s, mLen), rt)
 					}
 				}
 				results[c] = chunk
@@ -159,17 +180,18 @@ func ComputeEnsemble(seq []byte, m *EnergyModel, minLength, workers int) Ensembl
 	}
 }
 
-func AllStructures(seq []byte, m *EnergyModel, minLength int, ens EnsembleResult) []StructureRecord {
-	p := PrefixBPEnergies(seq, m)
+func AllStructures(seq []byte, m *EnergyModel, w Windows, ens EnsembleResult) []StructureRecord {
+	p := prefixBP(seq, m, w.Circular)
 	rt := m.RT()
+	n := len(seq)
 	recs := make([]StructureRecord, 0, ens.NumStructures)
 
-	for s := 0; s < len(seq); s++ {
-		for e := s + minLength - 1; e < len(seq); e++ {
-			g := windowEnergy(m, p, s, e)
+	for s := 0; s < n; s++ {
+		for mLen := w.MinLength; mLen <= maxLen(n, s, w.Circular); mLen++ {
+			g := windowEnergy(m, p, s, mLen)
 			recs = append(recs, StructureRecord{
 				Start:  s,
-				End:    e,
+				End:    windowEnd(s, mLen, n, w.Circular),
 				Energy: g,
 				Prob:   math.Exp(-g/rt - ens.LogZ),
 			})
@@ -181,18 +203,19 @@ func AllStructures(seq []byte, m *EnergyModel, minLength int, ens EnsembleResult
 	return recs
 }
 
-func TopStructures(seq []byte, m *EnergyModel, minLength int, ens EnsembleResult, n int) []StructureRecord {
+func TopStructures(seq []byte, m *EnergyModel, w Windows, ens EnsembleResult, n int) []StructureRecord {
 	if n <= 0 {
 		return nil
 	}
-	p := PrefixBPEnergies(seq, m)
+	p := prefixBP(seq, m, w.Circular)
 	rt := m.RT()
+	seqLen := len(seq)
 	top := make([]StructureRecord, 0, n)
 
-	for s := 0; s < len(seq); s++ {
-		for e := s + minLength - 1; e < len(seq); e++ {
-			g := windowEnergy(m, p, s, e)
-			r := StructureRecord{Start: s, End: e, Energy: g, Prob: math.Exp(-g/rt - ens.LogZ)}
+	for s := 0; s < seqLen; s++ {
+		for mLen := w.MinLength; mLen <= maxLen(seqLen, s, w.Circular); mLen++ {
+			g := windowEnergy(m, p, s, mLen)
+			r := StructureRecord{Start: s, End: windowEnd(s, mLen, seqLen, w.Circular), Energy: g, Prob: math.Exp(-g/rt - ens.LogZ)}
 			if len(top) == n && compareStructures(r, top[n-1]) >= 0 {
 				continue
 			}

@@ -25,20 +25,23 @@ func newSignalAccum(n int, withAvgG bool) signalAccum {
 	return acc
 }
 
-func (a *signalAccum) addRow(m *EnergyModel, p []float64, s, minLength int, rt, logZ float64) {
+func (a *signalAccum) addRow(m *EnergyModel, p []float64, s, minLength int, rt, logZ float64, circular bool) {
 	n := len(a.bp)
-	first := s + minLength - 1
 	var sumProb, sumProbG float64
-	for e := n - 1; e > s; e-- {
-		if e >= first {
-			g := windowEnergy(m, p, s, e)
+	for mLen := maxLen(n, s, circular); mLen >= 2; mLen-- {
+		if mLen >= minLength {
+			g := windowEnergy(m, p, s, mLen)
 			prob := math.Exp(-g/rt - logZ)
 			sumProb += prob
 			sumProbG += prob * g
 		}
-		a.bp[e-1] += sumProb
+		idx := s + mLen - 2
+		if circular {
+			idx %= n
+		}
+		a.bp[idx] += sumProb
 		if a.num != nil {
-			a.num[e-1] += sumProbG
+			a.num[idx] += sumProbG
 		}
 	}
 }
@@ -52,16 +55,16 @@ func (a *signalAccum) merge(o signalAccum) {
 	}
 }
 
-func ComputeSignals(seq []byte, m *EnergyModel, minLength int, ens EnsembleResult, withAvgG bool, workers int) Signals {
+func ComputeSignals(seq []byte, m *EnergyModel, w Windows, ens EnsembleResult, withAvgG bool) Signals {
 	n := len(seq)
-	p := PrefixBPEnergies(seq, m)
+	p := prefixBP(seq, m, w.Circular)
 	rt := m.RT()
-	workers = clampWorkers(workers, n)
+	workers := clampWorkers(w.Workers, n)
 
 	acc := newSignalAccum(n, withAvgG)
 	if workers <= 1 {
 		for s := 0; s < n; s++ {
-			acc.addRow(m, p, s, minLength, rt, ens.LogZ)
+			acc.addRow(m, p, s, w.MinLength, rt, ens.LogZ, w.Circular)
 		}
 	} else {
 		results := make([]signalAccum, workers)
@@ -72,7 +75,7 @@ func ComputeSignals(seq []byte, m *EnergyModel, minLength int, ens EnsembleResul
 				defer wg.Done()
 				chunk := newSignalAccum(n, withAvgG)
 				for s := c; s < n; s += workers {
-					chunk.addRow(m, p, s, minLength, rt, ens.LogZ)
+					chunk.addRow(m, p, s, w.MinLength, rt, ens.LogZ, w.Circular)
 				}
 				results[c] = chunk
 			}(c)
@@ -94,16 +97,24 @@ func ComputeSignals(seq []byte, m *EnergyModel, minLength int, ens EnsembleResul
 	}
 
 	if ens.NumStructures > 0 {
-		for i := ens.MFE.Start; i < ens.MFE.End; i++ {
-			sig.MFE[i] = 1
+		length := ens.MFE.Length(n)
+		for j := 0; j <= length-2; j++ {
+			sig.MFE[(ens.MFE.Start+j)%n] = 1
 		}
 	}
 
 	return sig
 }
 
-func StructureResiduals(m *EnergyModel, r StructureRecord) (twist, linkingDifference float64) {
-	l := float64(r.End - r.Start)
+func (r StructureRecord) Length(n int) int {
+	if r.End < r.Start {
+		return r.End - r.Start + 1 + n
+	}
+	return r.End - r.Start + 1
+}
+
+func StructureResiduals(m *EnergyModel, mLen int) (twist, linkingDifference float64) {
+	l := float64(mLen - 1)
 	fourPiSqC := 4 * math.Pi * math.Pi * m.C
 	denom := fourPiSqC + m.K*l
 	linkingDifference = (fourPiSqC / denom) * (m.Alpha + l*m.A)
@@ -115,12 +126,12 @@ type residualAccum struct {
 	twist, linkingDifference, wrappingAbsorption, strandSeparation float64
 }
 
-func (a *residualAccum) addRow(m *EnergyModel, p []float64, s, n, minLength int, rt, logZ float64) {
-	for e := s + minLength - 1; e < n; e++ {
-		g := windowEnergy(m, p, s, e)
+func (a *residualAccum) addRow(m *EnergyModel, p []float64, s, n, minLength int, rt, logZ float64, circular bool) {
+	for mLen := minLength; mLen <= maxLen(n, s, circular); mLen++ {
+		g := windowEnergy(m, p, s, mLen)
 		prob := math.Exp(-g/rt - logZ)
-		l := float64(e - s)
-		rtw, rld := StructureResiduals(m, StructureRecord{Start: s, End: e})
+		l := float64(mLen - 1)
+		rtw, rld := StructureResiduals(m, mLen)
 		a.twist += rtw * prob
 		a.linkingDifference += rld * prob
 		a.wrappingAbsorption += (m.Alpha - rld + l*m.A) * prob
@@ -135,19 +146,19 @@ func (a *residualAccum) merge(o residualAccum) {
 	a.strandSeparation += o.strandSeparation
 }
 
-func ComputeResiduals(seq []byte, m *EnergyModel, minLength int, ens EnsembleResult, workers int) Residuals {
+func ComputeResiduals(seq []byte, m *EnergyModel, w Windows, ens EnsembleResult) Residuals {
 	var res Residuals
 
 	if ens.NumStructures > 0 {
 		n := len(seq)
-		p := PrefixBPEnergies(seq, m)
+		p := prefixBP(seq, m, w.Circular)
 		rt := m.RT()
-		workers = clampWorkers(workers, n)
+		workers := clampWorkers(w.Workers, n)
 
 		var acc residualAccum
 		if workers <= 1 {
 			for s := 0; s < n; s++ {
-				acc.addRow(m, p, s, n, minLength, rt, ens.LogZ)
+				acc.addRow(m, p, s, n, w.MinLength, rt, ens.LogZ, w.Circular)
 			}
 		} else {
 			results := make([]residualAccum, workers)
@@ -158,7 +169,7 @@ func ComputeResiduals(seq []byte, m *EnergyModel, minLength int, ens EnsembleRes
 					defer wg.Done()
 					var chunk residualAccum
 					for s := c; s < n; s += workers {
-						chunk.addRow(m, p, s, n, minLength, rt, ens.LogZ)
+						chunk.addRow(m, p, s, n, w.MinLength, rt, ens.LogZ, w.Circular)
 					}
 					results[c] = chunk
 				}(c)

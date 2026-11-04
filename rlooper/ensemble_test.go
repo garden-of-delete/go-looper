@@ -13,11 +13,12 @@ import (
 func TestEnsembleMatchesDirectSum(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("GATTACA")
-	ens := ComputeEnsemble(seq, m, 2, 1)
+	w := Windows{MinLength: 2, Workers: 1}
+	ens := ComputeEnsemble(seq, m, w)
 	if ens.NumStructures != 21 {
 		t.Fatalf("count=%d", ens.NumStructures)
 	}
-	p := PrefixBPEnergies(seq, m)
+	p := prefixBP(seq, m, false)
 	var z float64
 	for s := 0; s < len(seq); s++ {
 		for e := s + 1; e < len(seq); e++ {
@@ -29,7 +30,7 @@ func TestEnsembleMatchesDirectSum(t *testing.T) {
 	if rel(ens.LogZ, math.Log(z)) > 1e-12 {
 		t.Fatalf("logZ %g vs %g", ens.LogZ, math.Log(z))
 	}
-	recs := AllStructures(seq, m, 2, ens)
+	recs := AllStructures(seq, m, w, ens)
 	var sum float64
 	for _, r := range recs {
 		sum += r.Prob
@@ -44,7 +45,7 @@ func TestEnsembleMatchesDirectSum(t *testing.T) {
 
 func TestEnsembleNoWindows(t *testing.T) {
 	m := NewDefaultModel()
-	ens := ComputeEnsemble([]byte("ACGT"), m, 10, 1)
+	ens := ComputeEnsemble([]byte("ACGT"), m, Windows{MinLength: 10, Workers: 1})
 	if ens.NumStructures != 0 || math.Abs(ens.PGround-1) > 1e-12 || math.IsNaN(ens.LogZ) {
 		t.Fatalf("%+v", ens)
 	}
@@ -57,7 +58,7 @@ func TestEnsembleNoOverflow(t *testing.T) {
 	m := NewDefaultModel()
 	m.Homopolymer, m.OverrideEnergy = true, -5
 	seq := bytes.Repeat([]byte("A"), 5000)
-	ens := ComputeEnsemble(seq, m, 2, 1)
+	ens := ComputeEnsemble(seq, m, Windows{MinLength: 2, Workers: 1})
 	if math.IsInf(ens.LogZ, 0) || math.IsNaN(ens.LogZ) || ens.PGround < 0 {
 		t.Fatalf("%+v", ens)
 	}
@@ -109,8 +110,9 @@ func TestEnsembleMFETieBreak(t *testing.T) {
 	m := NewDefaultModel()
 	m.Homopolymer, m.OverrideEnergy = true, 0.5
 	seq := bytes.Repeat([]byte("A"), 150)
-	ens := ComputeEnsemble(seq, m, 2, 1)
-	recs := AllStructures(seq, m, 2, ens)
+	w := Windows{MinLength: 2, Workers: 1}
+	ens := ComputeEnsemble(seq, m, w)
+	recs := AllStructures(seq, m, w, ens)
 
 	if recs[1].Energy != recs[0].Energy {
 		t.Fatalf("setup does not exercise a tie: recs[0].Energy=%g recs[1].Energy=%g", recs[0].Energy, recs[1].Energy)
@@ -162,10 +164,11 @@ func TestTopStructuresMatchesAllStructures(t *testing.T) {
 	g := genes[0]
 	g.ApplyOrientation(false, false, false)
 	m := NewDefaultModel()
-	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
+	w := Windows{MinLength: 2, Workers: 1}
+	ens := ComputeEnsemble(g.Sequence, m, w)
 
-	all := AllStructures(g.Sequence, m, 2, ens)
-	top := TopStructures(g.Sequence, m, 2, ens, 5)
+	all := AllStructures(g.Sequence, m, w, ens)
+	top := TopStructures(g.Sequence, m, w, ens, 5)
 
 	if len(top) != 5 {
 		t.Fatalf("len(top) = %d, want 5", len(top))
@@ -182,8 +185,9 @@ func TestEnsembleAgainstGoldenDump(t *testing.T) {
 	g := genes[0]
 	g.ApplyOrientation(false, false, false)
 	m := NewDefaultModel()
-	ens := ComputeEnsemble(g.Sequence, m, 2, 1)
-	recs := AllStructures(g.Sequence, m, 2, ens)
+	w := Windows{MinLength: 2, Workers: 1}
+	ens := ComputeEnsemble(g.Sequence, m, w)
+	recs := AllStructures(g.Sequence, m, w, ens)
 	want := parseDump(t, "../testdata/golden/defaults/outSYNTH200_dump.txt")
 	if len(recs) != len(want) {
 		t.Fatalf("count %d vs %d", len(recs), len(want))
