@@ -189,6 +189,25 @@ func forEachRetainedState(m *Model, lists [][]candidate, minE float64, visit fun
 	}
 }
 
+type compensatedSum struct{ sum, carry float64 }
+
+func (c *compensatedSum) add(x float64) {
+	t := c.sum + x
+	if math.Abs(c.sum) >= math.Abs(x) {
+		c.carry += (c.sum - t) + x
+	} else {
+		c.carry += (x - t) + c.sum
+	}
+	c.sum = t
+}
+
+func (c *compensatedSum) value() float64 {
+	if !isFinite(c.carry) {
+		return c.sum
+	}
+	return c.sum + c.carry
+}
+
 func runMulti(m *Model) (*Result, error) {
 	lists := candidates(m)
 	minE := globalMinimum(m, lists)
@@ -197,7 +216,7 @@ func runMulti(m *Model) (*Result, error) {
 	}
 	res := &Result{MinE: minE, MaxE: minE + m.Threshold}
 
-	var sumB, sumG, sumRuns float64
+	var sumB, sumG, sumRuns compensatedSum
 	forEachRetainedState(m, lists, minE, func(runs []runSpan, E, w float64) {
 		switch len(runs) {
 		case 1:
@@ -209,19 +228,22 @@ func runMulti(m *Model) (*Result, error) {
 		default:
 			res.FourRunStates++
 		}
-		sumB += w
-		sumG += float64(E * w)
-		sumRuns += float64(float64(len(runs)) * w)
+		sumB.add(w)
+		sumG.add(float64(E * w))
+		sumRuns.add(float64(float64(len(runs)) * w))
 	})
 
 	res.GroundW = math.Exp(-m.Alpha*m.Alpha*m.K/2/m.RT + Shift)
-	res.ZB = sumB + res.GroundW
-	res.ZG = sumG + float64(m.Alpha*m.Alpha*m.K/2*res.GroundW)
+	retainedB := sumB.value()
+	sumB.add(res.GroundW)
+	sumG.add(float64(m.Alpha * m.Alpha * m.K / 2 * res.GroundW))
+	res.ZB = sumB.value()
+	res.ZG = sumG.value()
 
 	if res.ZB == 0 || !isFinite(res.ZB) || !isFinite(res.ZG) {
 		return nil, fmt.Errorf("sidd: partition function (ZB %v, ZG %v) is not representable at these parameters; shorten the sequence or use a less negative sigma", res.ZB, res.ZG)
 	}
-	res.TransitionProb = sumB / res.ZB
-	res.AvgRuns = sumRuns / res.ZB
+	res.TransitionProb = retainedB / res.ZB
+	res.AvgRuns = sumRuns.value() / res.ZB
 	return res, nil
 }
