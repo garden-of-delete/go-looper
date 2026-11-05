@@ -22,6 +22,7 @@ func uniformSeq(base byte, n int) []byte {
 func newTestModel(t *testing.T, seq []byte, mutate func(*Params)) *Model {
 	t.Helper()
 	p := DefaultParams()
+	p.MaxRuns = 1
 	if mutate != nil {
 		mutate(&p)
 	}

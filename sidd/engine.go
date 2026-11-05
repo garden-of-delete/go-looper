@@ -10,6 +10,10 @@ import (
 type Result struct {
 	MinE, MaxE     float64
 	OneRunStates   int
+	TwoRunStates   int
+	ThreeRunStates int
+	FourRunStates  int
+	AvgRuns        float64
 	ZB, ZG         float64
 	GroundW        float64
 	TransitionProb float64
@@ -83,6 +87,18 @@ func checkRepresentable(m *Model, minE float64) error {
 }
 
 func Run(m *Model) (*Result, error) {
+	if m.MaxRuns > 1 {
+		return runMulti(m)
+	}
+	res, err := runSingle(m)
+	if err != nil {
+		return nil, err
+	}
+	res.AvgRuns = res.TransitionProb
+	return res, nil
+}
+
+func runSingle(m *Model) (*Result, error) {
 	lists := candidates(m)
 	minE := minimumEnergy(m, lists)
 	if err := checkRepresentable(m, minE); err != nil {

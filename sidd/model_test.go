@@ -33,7 +33,7 @@ func relDiff(a, b float64) float64 {
 
 func TestModelDefaults(t *testing.T) {
 	p := DefaultParams()
-	want := Params{Sigma: -0.06, Temperature: 310, Salt: 0.01, Threshold: 12, MinLen: 1, MaxLen: 250}
+	want := Params{Sigma: -0.06, Temperature: 310, Salt: 0.01, Threshold: 12, MinLen: 1, MaxLen: 250, MaxRuns: 4}
 	if p != want {
 		t.Fatalf("DefaultParams = %+v, want %+v", p, want)
 	}
@@ -213,6 +213,7 @@ func TestModelLinearMaxLenCap(t *testing.T) {
 	p := DefaultParams()
 	p.Geometry = GeomLinear
 	p.MaxLen = 1000000
+	p.MaxRuns = 1
 	m, err := NewModel(seq, p)
 	if err != nil {
 		t.Fatal(err)

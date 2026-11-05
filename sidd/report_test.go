@@ -43,6 +43,7 @@ func TestFormatSIST(t *testing.T) {
 func assertReportParity(t *testing.T, goldenCase string, mutate func(*Params)) {
 	t.Helper()
 	p := DefaultParams()
+	p.MaxRuns = 1
 	mutate(&p)
 	m, err := NewModel(loadPBR322(t), p)
 	if err != nil {

@@ -161,6 +161,7 @@ func writeFile(name string, write func(*os.File) error) error {
 
 func newRootCmd() *cobra.Command {
 	o := &options{params: sidd.DefaultParams()}
+	o.params.MaxRuns = 1
 	cmd := &cobra.Command{
 		Use:     "golooper-sidd",
 		Short:   "golooper-sidd computes SIDD strand-separation profiles for a single DNA sequence.",

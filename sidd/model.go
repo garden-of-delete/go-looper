@@ -33,10 +33,11 @@ type Params struct {
 	N                                   float64
 	NearestNeighbor                     bool
 	Geometry                            Geometry
+	MaxRuns                             int
 }
 
 func DefaultParams() Params {
-	return Params{Sigma: -0.06, Temperature: 310, Salt: 0.01, Threshold: 12, MinLen: 1, MaxLen: 250}
+	return Params{Sigma: -0.06, Temperature: 310, Salt: 0.01, Threshold: 12, MinLen: 1, MaxLen: 250, MaxRuns: 4}
 }
 
 type Model struct {
@@ -69,6 +70,8 @@ func NewModel(seq []byte, p Params) (*Model, error) {
 		return nil, fmt.Errorf("sidd: threshold %v must not be negative", p.Threshold)
 	case p.Sigma > 0:
 		return nil, fmt.Errorf("sidd: positive sigma %v (positive supercoiling) is not supported; SIST's positive-magnitude -s convention corresponds to a negative --sigma here", p.Sigma)
+	case p.MaxRuns < 1 || p.MaxRuns > 4:
+		return nil, fmt.Errorf("sidd: maximum runs %d must be between 1 and 4", p.MaxRuns)
 	}
 	for i, b := range seq {
 		if baseCode[b] == 0 {
