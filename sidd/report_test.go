@@ -5,6 +5,8 @@ import (
 	"math"
 	"os"
 	"testing"
+
+	"golooper/internal/goldencmp"
 )
 
 func TestFormatSIST(t *testing.T) {
@@ -29,6 +31,9 @@ func TestFormatSIST(t *testing.T) {
 		{123456.4, "123456"},
 		{1e100, "1e+100"},
 		{2.226931e-60, "2.22693e-60"},
+		{2769779, "2.76978e+06"},
+		{2.191011e-60, "2.19101e-60"},
+		{300, "300"},
 		{math.NaN(), "nan"},
 		{math.Inf(1), "inf"},
 		{math.Inf(-1), "-inf"},
@@ -88,6 +93,87 @@ func TestReportGoldenParity_CircularCopolyDefaults(t *testing.T) {
 
 func TestReportGoldenParity_ClampCopolyAlt(t *testing.T) {
 	assertReportParity(t, "clamp-copoly-alt", func(p *Params) {
+		p.Geometry = GeomClamp
+		p.Temperature = 315
+		p.Salt = 0.1
+		p.Sigma = -0.04
+		p.Threshold = 10
+	})
+}
+
+func assertMultiRunParity(t *testing.T, goldenCase, fixture string, mutate func(*Params)) {
+	t.Helper()
+	p := DefaultParams()
+	p.MaxRuns = 4
+	mutate(&p)
+	data, err := os.ReadFile("../testdata/fixtures/" + fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var seq []byte
+	for _, line := range bytes.Split(data, []byte("\n")) {
+		if !bytes.HasPrefix(line, []byte(">")) {
+			seq = append(seq, bytes.TrimSpace(line)...)
+		}
+	}
+	m, err := NewModel(seq, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := Run(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got bytes.Buffer
+	if err := WriteReport(&got, fixture, m, res); err != nil {
+		t.Fatal(err)
+	}
+	want, err := os.ReadFile("../testdata/golden/sidd-multirun/" + goldenCase + "/stdout.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mm := range goldencmp.Compare(want, got.Bytes(), goldencmp.Tolerances{FloatRel: 1e-6, MinMagnitude: 1e-12}) {
+		t.Error(mm)
+	}
+}
+
+func TestReportMultiRunParity_ClampCopolyDefaults(t *testing.T) {
+	assertMultiRunParity(t, "mr-clamp-copoly-defaults", "pbr322.toy.fa", func(p *Params) {
+		p.Geometry = GeomClamp
+	})
+}
+
+func TestReportMultiRunParity_Hot(t *testing.T) {
+	assertMultiRunParity(t, "mr-clamp-copoly-hot", "pbr322.toy.fa", func(p *Params) {
+		p.Geometry = GeomClamp
+		p.Temperature = 320
+		p.Threshold = 15
+		p.Sigma = -0.04
+	})
+}
+
+func TestReportMultiRunParity_ClampNNDefaults(t *testing.T) {
+	assertMultiRunParity(t, "mr-clamp-nn-defaults", "pbr322.toy.fa", func(p *Params) {
+		p.Geometry = GeomClamp
+		p.NearestNeighbor = true
+	})
+}
+
+func TestReportMultiRunParity_CircularCopolyDefaults(t *testing.T) {
+	assertMultiRunParity(t, "mr-circular-copoly-defaults", "pbr322.toy.fa", func(p *Params) {
+		p.Geometry = GeomCircular
+	})
+}
+
+func TestReportMultiRunParity_CircularNNSynth(t *testing.T) {
+	assertMultiRunParity(t, "mr-circular-nn-synth", "sidd_synth1600.fa", func(p *Params) {
+		p.Geometry = GeomCircular
+		p.NearestNeighbor = true
+	})
+}
+
+func TestReportMultiRunParity_ClampCopolyAlt(t *testing.T) {
+	assertMultiRunParity(t, "mr-clamp-copoly-alt", "pbr322.toy.fa", func(p *Params) {
 		p.Geometry = GeomClamp
 		p.Temperature = 315
 		p.Salt = 0.1

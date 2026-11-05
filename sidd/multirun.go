@@ -208,6 +208,41 @@ func (c *compensatedSum) value() float64 {
 	return c.sum + c.carry
 }
 
+type compensatedCell struct{ sumG, sumB compensatedSum }
+
+type compensatedMatrix [][]compensatedCell
+
+func newCompensatedMatrix(m *Model) compensatedMatrix {
+	cells := make(compensatedMatrix, m.MaxLen+1)
+	for n := m.MinLen; n <= m.MaxLen; n++ {
+		cells[n] = make([]compensatedCell, m.EngLen)
+	}
+	return cells
+}
+
+func (c compensatedMatrix) add(runs []runSpan, E, w float64) {
+	ew := float64(E * w)
+	for _, r := range runs {
+		cl := &c[r.length][r.start]
+		cl.sumG.add(ew)
+		cl.sumB.add(w)
+	}
+}
+
+func (c compensatedMatrix) collapse() cellMatrix {
+	out := make(cellMatrix, len(c))
+	for n, row := range c {
+		if row == nil {
+			continue
+		}
+		out[n] = make([]cell, len(row))
+		for s := range row {
+			out[n][s] = cell{sumG: row[s].sumG.value(), sumB: row[s].sumB.value()}
+		}
+	}
+	return out
+}
+
 func runMulti(m *Model) (*Result, error) {
 	lists := candidates(m)
 	minE := globalMinimum(m, lists)
@@ -217,6 +252,7 @@ func runMulti(m *Model) (*Result, error) {
 	res := &Result{MinE: minE, MaxE: minE + m.Threshold}
 
 	var sumB, sumG, sumRuns compensatedSum
+	cells := newCompensatedMatrix(m)
 	forEachRetainedState(m, lists, minE, func(runs []runSpan, E, w float64) {
 		switch len(runs) {
 		case 1:
@@ -231,6 +267,7 @@ func runMulti(m *Model) (*Result, error) {
 		sumB.add(w)
 		sumG.add(float64(E * w))
 		sumRuns.add(float64(float64(len(runs)) * w))
+		cells.add(runs, E, w)
 	})
 
 	res.GroundW = math.Exp(-m.Alpha*m.Alpha*m.K/2/m.RT + Shift)
@@ -245,5 +282,6 @@ func runMulti(m *Model) (*Result, error) {
 	}
 	res.TransitionProb = retainedB / res.ZB
 	res.AvgRuns = sumRuns.value() / res.ZB
+	cells.collapse().accumulate(m).finish(m, res.ZB, res.ZG, res)
 	return res, nil
 }

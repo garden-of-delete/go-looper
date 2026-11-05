@@ -348,10 +348,33 @@ func TestNaiveTiedWindowEdge(t *testing.T) {
 }
 
 func TestNaiveMultiRunProfile(t *testing.T) {
-	t.Skip("profile deposition lands in Task 4")
-	leg := anchorLeg{name: "circular-copolymeric", geom: GeomCircular, sigma: -0.2}
-	size := anchorSize{3, 50, 6}
-	m := anchorModel(t, randomSeq(size.seqLen, 20260411), leg, size, 25)
+	clampSizes := []anchorSize{{3, 36, 5}, {4, 10, 2}}
+	openSizes := []anchorSize{{3, 50, 6}, {4, 30, 4}}
+	legs := []anchorLeg{
+		{"clamp-copolymeric", GeomClamp, false, -0.06, clampSizes},
+		{"circular-copolymeric", GeomCircular, false, -0.2, openSizes},
+		{"linear-copolymeric", GeomLinear, false, -0.2, openSizes},
+		{"clamp-nearest-neighbor", GeomClamp, true, -0.2, clampSizes},
+		{"circular-nearest-neighbor", GeomCircular, true, -0.06, openSizes},
+	}
+	for _, leg := range legs {
+		for _, size := range leg.sizes {
+			classStates := 0
+			for _, theta := range []float64{25, 40, 1e9} {
+				t.Run(fmt.Sprintf("%s/runs%d/theta%g", leg.name, size.runs, theta), func(t *testing.T) {
+					classStates += assertProfileAnchor(t, leg, size, theta)
+				})
+			}
+			if classStates == 0 {
+				t.Errorf("%s/runs%d: no %d-run state retained at any theta; the class's profile is unanchored", leg.name, size.runs, size.runs)
+			}
+		}
+	}
+}
+
+func assertProfileAnchor(t *testing.T, leg anchorLeg, size anchorSize, theta float64) int {
+	t.Helper()
+	m := anchorModel(t, randomSeq(size.seqLen, 20260411), leg, size, theta)
 	res, err := Run(m)
 	if err != nil {
 		t.Fatal(err)
@@ -364,7 +387,7 @@ func TestNaiveMultiRunProfile(t *testing.T) {
 	edge := minE + m.Threshold
 	groundW := math.Exp(-ground/m.RT + Shift)
 	var zbSum, zgSum anchorSum
-	multi := 0
+	multi, classStates := 0, 0
 	sumB := make([]anchorSum, m.EngLen)
 	sumG := make([]anchorSum, m.EngLen)
 	space.each(func(runs []anchorRun, E float64) {
@@ -374,6 +397,9 @@ func TestNaiveMultiRunProfile(t *testing.T) {
 		w := math.Exp(-E/m.RT + Shift)
 		if len(runs) >= 2 {
 			multi++
+		}
+		if len(runs) == size.runs {
+			classStates++
 		}
 		zbSum.add(w)
 		zgSum.add(E * w)
@@ -420,4 +446,5 @@ func TestNaiveMultiRunProfile(t *testing.T) {
 			t.Errorf("G[%d] = %v, want %v", x, res.G[x], gx[x])
 		}
 	}
+	return classStates
 }
