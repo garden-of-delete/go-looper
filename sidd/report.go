@@ -8,6 +8,7 @@ import (
 	"strconv"
 )
 
+// FormatSIST formats v like C++ iostream default output (%g with 6 significant digits), spelling NaN and infinities as nan, inf and -inf.
 func FormatSIST(v float64) string {
 	switch {
 	case math.IsNaN(v):
@@ -20,6 +21,7 @@ func FormatSIST(v float64) string {
 	return strconv.FormatFloat(v, 'g', 6, 64)
 }
 
+// WriteReport writes the SIST-format report for r; the multi-run summary lines appear only when m.MaxRuns is above 1.
 func WriteReport(w io.Writer, inputName string, m *Model, r *Result) error {
 	bw := bufio.NewWriter(w)
 	transition := "Transition: Melting - copolymeric energetics"

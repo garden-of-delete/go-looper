@@ -12,6 +12,7 @@ const goldenPath = "../../testdata/golden/sidd-multirun/mr-clamp-copoly-defaults
 
 var canonical = Tolerances{FloatRel: 1e-6, MinMagnitude: 1e-12}
 
+// loadGolden reads the committed multi-run golden used as the comparator's fixture.
 func loadGolden(t *testing.T) []byte {
 	t.Helper()
 	data, err := os.ReadFile(goldenPath)
@@ -21,6 +22,7 @@ func loadGolden(t *testing.T) []byte {
 	return data
 }
 
+// replaceLine returns data with line index rewritten by edit.
 func replaceLine(t *testing.T, data []byte, index int, edit func(string) string) []byte {
 	t.Helper()
 	lines := strings.Split(string(data), "\n")
@@ -28,6 +30,7 @@ func replaceLine(t *testing.T, data []byte, index int, edit func(string) string)
 	return []byte(strings.Join(lines, "\n"))
 }
 
+// replaceOnce replaces old in line, failing the test unless old occurs exactly once.
 func replaceOnce(t *testing.T, line, old, replacement string) string {
 	t.Helper()
 	if strings.Count(line, old) != 1 {
@@ -36,6 +39,7 @@ func replaceOnce(t *testing.T, line, old, replacement string) string {
 	return strings.Replace(line, old, replacement, 1)
 }
 
+// single returns the only mismatch in mm, failing the test if there is not exactly one.
 func single(t *testing.T, mm []Mismatch) Mismatch {
 	t.Helper()
 	if len(mm) != 1 {
@@ -53,6 +57,7 @@ const (
 	lineFirstTable = 25
 )
 
+// TestCompareSelf pins that a golden compared against itself yields no mismatches.
 func TestCompareSelf(t *testing.T) {
 	golden := loadGolden(t)
 	if got := Compare(golden, golden, canonical); len(got) != 0 {
@@ -60,6 +65,7 @@ func TestCompareSelf(t *testing.T) {
 	}
 }
 
+// TestCompareDoctored pins that doctored goldens are caught: tolerated 7th-digit noise passes, while real value, type, label, whitespace, field-count and line-count changes fail with the right line and field.
 func TestCompareDoctored(t *testing.T) {
 	golden := loadGolden(t)
 
@@ -212,6 +218,7 @@ func TestCompareDoctored(t *testing.T) {
 	})
 }
 
+// TestCompareMinMagnitude pins that the magnitude floor lets two sub-floor table values pass but not a sub-floor against an above-floor value.
 func TestCompareMinMagnitude(t *testing.T) {
 	golden := []byte("12\tA\t1e-13\t5.5\n")
 	if mm := Compare(golden, []byte("12\tA\t2e-13\t5.5\n"), canonical); len(mm) != 0 {
@@ -222,6 +229,7 @@ func TestCompareMinMagnitude(t *testing.T) {
 	}
 }
 
+// TestCompareHeaderFloatsIgnoreFloor pins that a header float such as the partition function is always compared, even when far below the floor.
 func TestCompareHeaderFloatsIgnoreFloor(t *testing.T) {
 	golden := loadGolden(t)
 	const prefix = "Total Partition Function = "

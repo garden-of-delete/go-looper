@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+FORCE=0
+case "${1:-}" in
+"") ;;
+--force) FORCE=1 ;;
+*)
+    echo "usage: $0 [--force]" >&2
+    exit 2
+    ;;
+esac
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SIST_DIR="$(cd "${SIST_DIR:-$REPO_ROOT/../SIST}" && pwd)"
@@ -33,6 +43,8 @@ fi
 
 BUILD_DIR="$(mktemp -d)"
 trap 'rm -rf "$BUILD_DIR"' EXIT
+STAGE_DIR="$BUILD_DIR/staged"
+mkdir -p "$STAGE_DIR"
 
 python3 -I -c "
 s=''.join(l.strip() for l in open('$TOY_FA'))
@@ -100,8 +112,8 @@ run_case() {
         echo "$case_name: PROBE did not report the three level-start lines" >&2
         exit 1
     fi
-    mkdir -p "$GOLDEN_DIR/$case_name"
-    grep -v '^Run time' "$run_dir/stdout.raw" > "$GOLDEN_DIR/$case_name/stdout.txt"
+    mkdir -p "$STAGE_DIR/$case_name"
+    grep -v '^Run time' "$run_dir/stdout.raw" > "$STAGE_DIR/$case_name/stdout.txt"
     echo "$case_name: probe gate passed, DEDUP run time ${elapsed}s"
 }
 
@@ -109,7 +121,7 @@ verify_case() {
     local case_name="$1"
     local expected_rows="$2"
     local kind="$3"
-    local golden="$GOLDEN_DIR/$case_name/stdout.txt"
+    local golden="$STAGE_DIR/$case_name/stdout.txt"
     local rows
     if [ ! -s "$golden" ]; then
         echo "missing or empty: $golden" >&2
@@ -152,7 +164,6 @@ verify_case() {
     esac
 }
 
-mkdir -p "$GOLDEN_DIR"
 run_case mr-clamp-copoly-defaults "$TOY_FA"
 run_case mr-clamp-nn-defaults "$TOY_FA" -n
 run_case mr-circular-copoly-defaults "$TOY_FA" -c
@@ -173,6 +184,30 @@ verify_case mr-clamp-copoly-hot 4361 hot
 verify_case mr-circular-nn-defaults 4361 populated
 verify_case mr-clamp-copoly-synth 1600 populated
 verify_case mr-origin-straddle 4361 populated
+
+echo "--- checking staged goldens against existing goldens ---"
+changed=0
+for staged in "$STAGE_DIR"/*/stdout.txt; do
+    case_name="$(basename "$(dirname "$staged")")"
+    existing="$GOLDEN_DIR/$case_name/stdout.txt"
+    if [ -f "$existing" ] && ! cmp -s "$staged" "$existing"; then
+        echo "$case_name: staged golden differs from the committed golden:" >&2
+        diff "$existing" "$staged" | head -20 >&2 || true
+        changed=1
+    fi
+done
+if [ "$changed" = "1" ] && [ "$FORCE" != "1" ]; then
+    echo "refusing to overwrite differing goldens; rerun with --force to replace them" >&2
+    exit 1
+fi
+
+echo "--- installing goldens ---"
+mkdir -p "$GOLDEN_DIR"
+for staged in "$STAGE_DIR"/*/stdout.txt; do
+    case_name="$(basename "$(dirname "$staged")")"
+    mkdir -p "$GOLDEN_DIR/$case_name"
+    cp "$staged" "$GOLDEN_DIR/$case_name/stdout.txt"
+done
 
 echo "--- writing README ---"
 DEDUP_SHA="$(shasum -a 256 "$DEDUP_PATCH" | cut -d' ' -f1)"
@@ -204,11 +239,13 @@ the dedup and probe patches (PROBE).
 
 ## Oracle
 
-Stock SIST double-counts equal-length run pairs in the 2R/3R/4R searches
-(\`n1 == n2\` restarts the inner iterator at \`begin()\` plus one instead of
-after the outer iterator). \`scripts/sist-dedup-fix.patch\` (\`patch -p1\` inside
-a scratch copy of \`src/trans_three\`) fixes this; the goldens are the output of the
-fixed build, with \`^Run time\` lines removed.
+In SIST's 2R/3R/4R searches a pair of equal-length runs is visited under both
+orderings (\`n1 == n2\` restarts the inner iterator at \`begin()\` plus one rather
+than after the outer iterator), so such a pair enters the sums twice.
+\`scripts/sist-dedup-fix.patch\` (\`patch -p1\` inside a scratch copy of
+\`src/trans_three\`) starts the inner iterator after the outer one, matching the
+convention golooper-sidd uses, so that the two programs enumerate the same
+states. The goldens are the output of that build, with \`^Run time\` lines removed.
 
 Before patching, the stock binary is run as \`./qsidd -b -p -r -f pbr322.toy.fa\`
 and must match \`tests/regression/reference/v1.0.0/melting.txt\` (ignoring

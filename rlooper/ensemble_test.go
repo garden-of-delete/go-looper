@@ -10,6 +10,7 @@ import (
 	"testing"
 )
 
+// TestEnsembleMatchesDirectSum pins LogZ against a direct non-log-space sum, probabilities summing to 1 with the ground state, and the MFE being the first sorted record.
 func TestEnsembleMatchesDirectSum(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("GATTACA")
@@ -43,6 +44,7 @@ func TestEnsembleMatchesDirectSum(t *testing.T) {
 	}
 }
 
+// TestEnsembleNoWindows pins that with no admissible windows the ground state has probability 1 and the MFE is the zero record.
 func TestEnsembleNoWindows(t *testing.T) {
 	m := NewDefaultModel()
 	ens := ComputeEnsemble([]byte("ACGT"), m, Windows{MinLength: 10, Workers: 1})
@@ -54,6 +56,7 @@ func TestEnsembleNoWindows(t *testing.T) {
 	}
 }
 
+// TestEnsembleNoOverflow pins that log-sum-exp keeps LogZ finite where a direct exp sum would overflow.
 func TestEnsembleNoOverflow(t *testing.T) {
 	m := NewDefaultModel()
 	m.Homopolymer, m.OverrideEnergy = true, -5
@@ -64,8 +67,10 @@ func TestEnsembleNoOverflow(t *testing.T) {
 	}
 }
 
+// rel returns the relative error of a against b, guarding against a zero denominator.
 func rel(a, b float64) float64 { return math.Abs(a-b) / math.Max(math.Abs(b), 1e-300) }
 
+// TestCompareStructures pins the energy, then Start, then End ordering of compareStructures.
 func TestCompareStructures(t *testing.T) {
 	tests := []struct {
 		name string
@@ -106,6 +111,7 @@ func TestCompareStructures(t *testing.T) {
 	}
 }
 
+// TestEnsembleMFETieBreak pins that among equal-energy structures the first in enumeration order is the MFE.
 func TestEnsembleMFETieBreak(t *testing.T) {
 	m := NewDefaultModel()
 	m.Homopolymer, m.OverrideEnergy = true, 0.5
@@ -125,6 +131,7 @@ func TestEnsembleMFETieBreak(t *testing.T) {
 	}
 }
 
+// TestLogSumExpMergeEmptyEmptyThenNonEmpty pins that merging two empty accumulators stays empty and a following non-empty merge yields its value.
 func TestLogSumExpMergeEmptyEmptyThenNonEmpty(t *testing.T) {
 	a := newLogSumExp()
 	b := newLogSumExp()
@@ -137,6 +144,7 @@ func TestLogSumExpMergeEmptyEmptyThenNonEmpty(t *testing.T) {
 	}
 }
 
+// TestLogSumExpMergeEmptyTakesNonEmpty pins that merging into an empty accumulator adopts the other's value.
 func TestLogSumExpMergeEmptyTakesNonEmpty(t *testing.T) {
 	empty := newLogSumExp()
 	x := newLogSumExp()
@@ -148,6 +156,7 @@ func TestLogSumExpMergeEmptyTakesNonEmpty(t *testing.T) {
 	}
 }
 
+// TestLogSumExpMergeNonEmptyWithEmptyUnchanged pins that merging an empty accumulator leaves the value unchanged.
 func TestLogSumExpMergeNonEmptyWithEmptyUnchanged(t *testing.T) {
 	x := newLogSumExp()
 	x.add(1)
@@ -159,6 +168,7 @@ func TestLogSumExpMergeNonEmptyWithEmptyUnchanged(t *testing.T) {
 	}
 }
 
+// TestTopStructuresMatchesAllStructures pins that TopStructures equals the first n records of AllStructures.
 func TestTopStructuresMatchesAllStructures(t *testing.T) {
 	genes := readFixture(t, "../testdata/fixtures/synthetic200.fa")
 	g := genes[0]
@@ -180,6 +190,7 @@ func TestTopStructuresMatchesAllStructures(t *testing.T) {
 	}
 }
 
+// TestEnsembleAgainstGoldenDump pins every structure's energy and probability against the C++ golden dump, with coordinates offset by the gene start.
 func TestEnsembleAgainstGoldenDump(t *testing.T) {
 	genes := readFixture(t, "../testdata/fixtures/synthetic200.fa")
 	g := genes[0]
@@ -202,6 +213,7 @@ func TestEnsembleAgainstGoldenDump(t *testing.T) {
 	}
 }
 
+// readFixture reads all FASTA records from path, failing the test on error.
 func readFixture(t *testing.T, path string) []*Gene {
 	t.Helper()
 	f, err := os.Open(path)
@@ -220,6 +232,7 @@ type goldenRow struct {
 	energy, prob float64
 }
 
+// parseDump parses a C++ structure dump into a map keyed by (start, stop), skipping the header and the (0,0) ground-state row.
 func parseDump(t *testing.T, path string) map[[2]int64]goldenRow {
 	t.Helper()
 	f, err := os.Open(path)
@@ -267,6 +280,7 @@ func parseDump(t *testing.T, path string) map[[2]int64]goldenRow {
 	return want
 }
 
+// checkTol fails unless got is within max(1e-9, 1e-5*|want|) of want, the golden-file tolerance.
 func checkTol(t *testing.T, got, want float64) {
 	t.Helper()
 	tol := math.Max(1e-9, 1e-5*math.Abs(want))

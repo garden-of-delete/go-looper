@@ -8,6 +8,7 @@ import (
 	"golooper/rlooper"
 )
 
+// sigmaGrid returns lo, lo+step, ... up to hi inclusive with a 1e-4 slack so a hi that is a float multiple of step is not dropped.
 func sigmaGrid(lo, hi, step float64) []float64 {
 	var sigmas []float64
 	for i := 0; ; i++ {
@@ -20,6 +21,7 @@ func sigmaGrid(lo, hi, step float64) []float64 {
 	return sigmas
 }
 
+// RunPerloop sweeps sigma from lo to hi on the first gene of cfg.InfileName and writes sigma and 1-P(ground state) per line to OutfileName+_perloop.txt.
 func RunPerloop(cfg *config.Config, lo, hi, step float64, threads int) error {
 	infile, err := os.Open(cfg.InfileName)
 	if err != nil {

@@ -14,6 +14,7 @@ import (
 	"testing"
 )
 
+// loadOrientedFixture loads the synthetic200 fixture gene with default orientation applied.
 func loadOrientedFixture(t *testing.T) *rlooper.Gene {
 	t.Helper()
 	f, err := os.Open("../testdata/fixtures/synthetic200.fa")
@@ -30,6 +31,7 @@ func loadOrientedFixture(t *testing.T) *rlooper.Gene {
 	return g
 }
 
+// checkTol fails unless got is within max(1e-9, 1e-5 relative) of want, the project-wide golden comparison tolerance.
 func checkTol(t *testing.T, got, want float64) {
 	t.Helper()
 	tol := math.Max(1e-9, 1e-5*math.Abs(want))
@@ -42,6 +44,7 @@ type dumpRow struct {
 	energy, prob float64
 }
 
+// parseDump parses WriteDump output into energy and probability keyed by (start, stop), skipping the header.
 func parseDump(t *testing.T, r io.Reader) map[[2]int64]dumpRow {
 	t.Helper()
 	sc := bufio.NewScanner(r)
@@ -84,6 +87,7 @@ func parseDump(t *testing.T, r io.Reader) map[[2]int64]dumpRow {
 	return rows
 }
 
+// parseBedPeaks reads the span rows of a BED file, skipping track and browser lines.
 func parseBedPeaks(t *testing.T, path string) []rlooper.Loci {
 	t.Helper()
 	f, err := os.Open(path)
@@ -119,6 +123,7 @@ func parseBedPeaks(t *testing.T, path string) []rlooper.Loci {
 	return peaks
 }
 
+// peakWindows reduces spans to (start, end) pairs for comparison.
 func peakWindows(peaks []rlooper.Loci) [][2]int64 {
 	out := make([][2]int64, len(peaks))
 	for i, p := range peaks {
@@ -127,6 +132,7 @@ func peakWindows(peaks []rlooper.Loci) [][2]int64 {
 	return out
 }
 
+// flattenPeakSpans concatenates every peak's spans in order.
 func flattenPeakSpans(peaks []Peak) []rlooper.Loci {
 	var out []rlooper.Loci
 	for _, p := range peaks {
@@ -140,6 +146,7 @@ type topRow struct {
 	energy, prob, twist, linkingDifference, superhelicity float64
 }
 
+// parseTopRows parses seven-field PrintTop rows from r, ignoring other lines such as the stdout preamble.
 func parseTopRows(t *testing.T, r io.Reader) []topRow {
 	t.Helper()
 	var rows []topRow
@@ -174,6 +181,7 @@ func parseTopRows(t *testing.T, r io.Reader) []topRow {
 	return rows
 }
 
+// parseResiduals parses the labelled ensemble_residual_* lines into a map by label.
 func parseResiduals(t *testing.T, r io.Reader) map[string]float64 {
 	t.Helper()
 	keys := []string{
@@ -207,6 +215,7 @@ func parseResiduals(t *testing.T, r io.Reader) map[string]float64 {
 	return values
 }
 
+// TestCallPeaksCircularOriginSpanningMerge pins that a run ending at the sequence end and one starting at index 0 become one two-span peak sharing a BED name.
 func TestCallPeaksCircularOriginSpanningMerge(t *testing.T) {
 	g := &rlooper.Gene{Loc: rlooper.Loci{Chromosome: "p", Strand: "+", Start: 100}}
 	signal := []float64{0.5, 0.2, 0, 0, 0.3, 0.9}
@@ -227,6 +236,7 @@ func TestCallPeaksCircularOriginSpanningMerge(t *testing.T) {
 	}
 }
 
+// TestCallPeaksCircularNoFalseMerge pins that a trailing-only or leading-only run is not merged across the origin.
 func TestCallPeaksCircularNoFalseMerge(t *testing.T) {
 	g := &rlooper.Gene{Loc: rlooper.Loci{Strand: "+", Start: 0}}
 	if p := CallPeaks([]float64{0, 0.5, 0, 0, 0.5, 0.5}, 0.1, g, true); len(p) != 2 {
@@ -237,6 +247,7 @@ func TestCallPeaksCircularNoFalseMerge(t *testing.T) {
 	}
 }
 
+// TestCallPeaksCircularAllAbove pins that an entirely above-threshold circular signal yields a single full-length span.
 func TestCallPeaksCircularAllAbove(t *testing.T) {
 	g := &rlooper.Gene{Loc: rlooper.Loci{Strand: "+", Start: 10}}
 	p := CallPeaks([]float64{0.5, 0.5, 0.5}, 0.1, g, true)
@@ -245,6 +256,7 @@ func TestCallPeaksCircularAllAbove(t *testing.T) {
 	}
 }
 
+// TestCallPeaksLinearUnchanged pins linear peak calls with half-open genomic spans, unaffected by the circular path.
 func TestCallPeaksLinearUnchanged(t *testing.T) {
 	g := &rlooper.Gene{Loc: rlooper.Loci{Chromosome: "chrT", Strand: "+", Start: 100}}
 	peaks := CallPeaks([]float64{0, 0.5, 0.5, 0, 0.2, 0, 0.9}, 0.1, g, false)
@@ -255,6 +267,7 @@ func TestCallPeaksLinearUnchanged(t *testing.T) {
 	}
 }
 
+// TestWriteWigSignalUnit pins the exact WIG bytes, including %g number formatting such as 1e-07.
 func TestWriteWigSignalUnit(t *testing.T) {
 	g := &rlooper.Gene{Name: "X", Loc: rlooper.Loci{Chromosome: "chrT", Start: 1000, End: 1003}}
 	var buf bytes.Buffer
@@ -267,6 +280,7 @@ func TestWriteWigSignalUnit(t *testing.T) {
 	}
 }
 
+// TestWriteBedPeaksNegativeStrand pins the NEG name prefix for a minus-strand gene.
 func TestWriteBedPeaksNegativeStrand(t *testing.T) {
 	g := &rlooper.Gene{Name: "X", Loc: rlooper.Loci{Chromosome: "chrT", Strand: "-", Start: 100, End: 110}}
 	peaks := []Peak{{Spans: []rlooper.Loci{{Chromosome: "chrT", Strand: "-", Start: 101, End: 103}}}}
@@ -279,6 +293,7 @@ func TestWriteBedPeaksNegativeStrand(t *testing.T) {
 	}
 }
 
+// TestWriteDumpNegativeStrandFlip pins the minus-strand coordinate mirroring about Loc.End in dump rows.
 func TestWriteDumpNegativeStrandFlip(t *testing.T) {
 	g := &rlooper.Gene{Loc: rlooper.Loci{Strand: "-", Start: 10, End: 19}}
 	recs := []rlooper.StructureRecord{{Start: 2, End: 5, Energy: 1, Prob: 0.5}}
@@ -295,6 +310,7 @@ func TestWriteDumpNegativeStrandFlip(t *testing.T) {
 	}
 }
 
+// TestWriteDumpWrappedSpanPinning pins that a wrapped record is written with start greater than stop rather than normalised.
 func TestWriteDumpWrappedSpanPinning(t *testing.T) {
 	g := &rlooper.Gene{Loc: rlooper.Loci{Strand: "+", Start: 100}}
 	recs := []rlooper.StructureRecord{{Start: 5, End: 1, Energy: 1, Prob: 0.5}}
@@ -311,6 +327,7 @@ func TestWriteDumpWrappedSpanPinning(t *testing.T) {
 	}
 }
 
+// TestWriteDumpInvalidStrand pins that an unspecified strand errors before any output is written.
 func TestWriteDumpInvalidStrand(t *testing.T) {
 	g := &rlooper.Gene{Loc: rlooper.Loci{Strand: ""}}
 	var buf bytes.Buffer
@@ -322,6 +339,7 @@ func TestWriteDumpInvalidStrand(t *testing.T) {
 	}
 }
 
+// TestPrintTopNegativeStrandFlip pins minus-strand coordinate mirroring in PrintTop rows.
 func TestPrintTopNegativeStrandFlip(t *testing.T) {
 	g := &rlooper.Gene{Loc: rlooper.Loci{Strand: "-", Start: 10, End: 19}, Sequence: make([]byte, 50)}
 	recs := []rlooper.StructureRecord{{Start: 2, End: 5, Energy: 1, Prob: 0.5}}
@@ -334,6 +352,7 @@ func TestPrintTopNegativeStrandFlip(t *testing.T) {
 	}
 }
 
+// TestPrintTopWrappedResidualsMatchNonWrappedTwin pins that a wrapped record's residuals equal those of the non-wrapped record of the same length.
 func TestPrintTopWrappedResidualsMatchNonWrappedTwin(t *testing.T) {
 	n := 200
 	wrapped := &rlooper.Gene{Loc: rlooper.Loci{Strand: "+", Start: 0}, Sequence: make([]byte, n)}
@@ -366,6 +385,7 @@ func TestPrintTopWrappedResidualsMatchNonWrappedTwin(t *testing.T) {
 	}
 }
 
+// TestLargeCoordinatesPrintAsIntegers pins that genomic coordinates in the hundred-million range print as plain integers, not %g exponents.
 func TestLargeCoordinatesPrintAsIntegers(t *testing.T) {
 	g := &rlooper.Gene{
 		Name:     "BIG",
@@ -415,6 +435,7 @@ func TestLargeCoordinatesPrintAsIntegers(t *testing.T) {
 	}
 }
 
+// TestPrintResidualsUnit pins the exact labels, order and number format of PrintResiduals.
 func TestPrintResidualsUnit(t *testing.T) {
 	r := rlooper.Residuals{
 		Twist:              -0.200898,
@@ -437,6 +458,7 @@ func TestPrintResidualsUnit(t *testing.T) {
 	}
 }
 
+// TestWriteDumpAgainstGoldenDefaults checks WriteDump against the reference golden dump for default parameters.
 func TestWriteDumpAgainstGoldenDefaults(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := rlooper.NewDefaultModel()
@@ -478,6 +500,7 @@ func TestWriteDumpAgainstGoldenDefaults(t *testing.T) {
 	}
 }
 
+// TestCallPeaksAgainstGoldenDefaults checks peak windows against the reference golden BED files for default parameters.
 func TestCallPeaksAgainstGoldenDefaults(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := rlooper.NewDefaultModel()
@@ -497,6 +520,7 @@ func TestCallPeaksAgainstGoldenDefaults(t *testing.T) {
 	}
 }
 
+// TestPrintTopAgainstGoldenDefaults checks PrintTop rows against the reference golden stdout for default parameters.
 func TestPrintTopAgainstGoldenDefaults(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := rlooper.NewDefaultModel()
@@ -548,6 +572,7 @@ func TestPrintTopAgainstGoldenDefaults(t *testing.T) {
 	}
 }
 
+// TestPrintResidualsAgainstGoldenDefaults checks ensemble residuals against the reference golden stdout for default parameters.
 func TestPrintResidualsAgainstGoldenDefaults(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := rlooper.NewDefaultModel()

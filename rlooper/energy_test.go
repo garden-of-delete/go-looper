@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// TestDefaults pins the derived K, Alpha, RT and ground-state energy of the default model.
 func TestDefaults(t *testing.T) {
 	m := NewDefaultModel()
 	near(t, m.K, 0.9029123033, 1e-9)
@@ -14,6 +15,7 @@ func TestDefaults(t *testing.T) {
 	near(t, m.GroundStateEnergy(), 36.017974, 1e-4)
 }
 
+// TestSetterCoupling pins that SetN and SetSigma recompute the derived K and Alpha.
 func TestSetterCoupling(t *testing.T) {
 	m := NewDefaultModel()
 	m.SetN(200)
@@ -23,6 +25,7 @@ func TestSetterCoupling(t *testing.T) {
 	near(t, m.Alpha, -1.923076923076923, 1e-12)
 }
 
+// TestSupercoilingEnergy pins the zero minimum at m=105, reference values at 2 and 500, and that Unconstrained drops the term.
 func TestSupercoilingEnergy(t *testing.T) {
 	m := NewDefaultModel()
 	if v := m.SupercoilingEnergy(105); math.Abs(v) > 1e-9 {
@@ -36,6 +39,7 @@ func TestSupercoilingEnergy(t *testing.T) {
 	}
 }
 
+// TestStepEnergyGattaca pins the GATTACA step-energy sum and the asymmetry of the CG and GC steps.
 func TestStepEnergyGattaca(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("GATTACA")
@@ -48,6 +52,7 @@ func TestStepEnergyGattaca(t *testing.T) {
 	near(t, m.StepEnergy('G', 'C'), 0.97, 1e-12)
 }
 
+// TestPrefixMatchesNaive pins prefixBP differences against naive per-window step sums on a random sequence.
 func TestPrefixMatchesNaive(t *testing.T) {
 	m := NewDefaultModel()
 	r := rand.New(rand.NewSource(42))
@@ -69,6 +74,7 @@ func TestPrefixMatchesNaive(t *testing.T) {
 	}
 }
 
+// near fails unless got is within the absolute tolerance tol of want.
 func near(t *testing.T, got, want, tol float64) {
 	t.Helper()
 	if math.Abs(got-want) > tol {

@@ -18,12 +18,14 @@ type Mismatch struct {
 	RelDiff            float64
 }
 
+// String formats the mismatch with its line, field, both values and relative difference.
 func (m Mismatch) String() string {
 	return fmt.Sprintf("line %d, field %s: golden %q, got %q, rel diff %.3g", m.Line, m.Field, m.Golden, m.Got, m.RelDiff)
 }
 
 var tableColumns = []string{"Position", "Base", "P(x)", "G(x)"}
 
+// Compare returns every difference between golden and got: labels and integers must match exactly, floats within tol.FloatRel, and a line-count difference is reported alongside the per-line mismatches.
 func Compare(golden, got []byte, tol Tolerances) []Mismatch {
 	g := strings.Split(string(golden), "\n")
 	r := strings.Split(string(got), "\n")
@@ -45,6 +47,7 @@ func Compare(golden, got []byte, tol Tolerances) []Mismatch {
 	return out
 }
 
+// compareLine tokenizes a differing line by tab (per-base table rows when it has four columns) or by space (header text), applying the magnitude floor only to table rows.
 func compareLine(line int, golden, got string, tol Tolerances) []Mismatch {
 	if strings.Contains(golden, "\t") {
 		isTable := strings.Count(golden, "\t") == len(tableColumns)-1
@@ -58,6 +61,7 @@ func compareLine(line int, golden, got string, tol Tolerances) []Mismatch {
 	return compareTokens(line, strings.Split(golden, " "), strings.Split(got, " "), textFieldName, tol, false)
 }
 
+// textFieldName names a numeric header token by the label words preceding it, so a mismatch reports its field rather than an index.
 func textFieldName(tokens []string, i int) string {
 	if !isNumber(tokens[i]) {
 		return fmt.Sprintf("text token %d", i)
@@ -77,6 +81,7 @@ func textFieldName(tokens []string, i int) string {
 	return strings.Join(words, " ")
 }
 
+// compareTokens reports a field-count mismatch and each differing token pair, naming fields via name; floor enables the MinMagnitude rule.
 func compareTokens(line int, golden, got []string, name func([]string, int) string, tol Tolerances, floor bool) []Mismatch {
 	var out []Mismatch
 	if len(golden) != len(got) {
@@ -98,6 +103,7 @@ func compareTokens(line int, golden, got []string, name func([]string, int) stri
 	return out
 }
 
+// isNumber reports whether s parses as a float and contains a digit, excluding Inf and NaN spellings.
 func isNumber(s string) bool {
 	if !strings.ContainsAny(s, "0123456789") {
 		return false
@@ -106,11 +112,13 @@ func isNumber(s string) bool {
 	return err == nil
 }
 
+// isInteger reports whether s parses as a base-10 integer.
 func isInteger(s string) bool {
 	_, err := strconv.ParseInt(s, 10, 64)
 	return err == nil
 }
 
+// relDiff returns |got-golden|/|golden|, or +Inf if either side is not a number.
 func relDiff(golden, got string) float64 {
 	if !isNumber(golden) || !isNumber(got) {
 		return math.Inf(1)
@@ -120,6 +128,7 @@ func relDiff(golden, got string) float64 {
 	return math.Abs(rv-gv) / math.Abs(gv)
 }
 
+// compareToken passes identical tokens; otherwise only two non-integer floats pass, within tol.FloatRel, and when floor is set values at or below MinMagnitude pass only if both are, so an integer/float or label change never passes silently.
 func compareToken(golden, got string, tol Tolerances, floor bool) (Mismatch, bool) {
 	m := Mismatch{Golden: golden, Got: got, RelDiff: relDiff(golden, got)}
 	if golden == got {

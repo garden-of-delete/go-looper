@@ -1,3 +1,4 @@
+c00faa1c941a3223e1012a76cb2ae8b4082aac0cd0e700aeb6ea09ed9bc9e109  scripts/sist-1r.patch
 f43fb48fe23540fb44d9420d04e35fca2535ee96df1a60f727eb3634f85060cf  testdata/golden/sidd/circular-copoly-defaults/stdout.txt
 2d87e50fa3ea133e797b2b110ed79413cbc861840aae8c2d0e59e57b5a5f411c  testdata/golden/sidd/circular-nn-alt/stdout.txt
 71516292464285a87ca28347caceee35413f15164406dd56684d8b7fb6330717  testdata/golden/sidd/circular-nn-defaults/stdout.txt

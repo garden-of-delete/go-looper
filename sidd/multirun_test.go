@@ -6,10 +6,12 @@ import (
 	"testing"
 )
 
+// covers reports whether the circular window (start, length) includes cell.
 func covers(start, length, engLen, cell int) bool {
 	return (cell-start+engLen)%engLen < length
 }
 
+// refSeparated is an independent cell-by-cell reference for separated(), restating SIST's overlap() asymmetric origin-crossing gaps.
 func refSeparated(p1, n1, p2, n2, engLen int) bool {
 	for c := 0; c < engLen; c++ {
 		if covers(p1, n1, engLen, c) && covers(p2, n2, engLen, c) {
@@ -32,6 +34,7 @@ func refSeparated(p1, n1, p2, n2, engLen int) bool {
 	return arc(p1, n1, p2) && arc(p2, n2, p1)
 }
 
+// TestSeparated pins the separation clauses, including the asymmetric origin-crossing gaps, and that argument order does not matter.
 func TestSeparated(t *testing.T) {
 	const L = 20
 	cases := []struct {
@@ -72,6 +75,7 @@ func TestSeparated(t *testing.T) {
 	}
 }
 
+// TestSeparatedMatchesReference pins separated() to refSeparated() exhaustively on a 14-base circle.
 func TestSeparatedMatchesReference(t *testing.T) {
 	const L = 14
 	for p1 := 0; p1 < L; p1++ {
@@ -87,6 +91,7 @@ func TestSeparatedMatchesReference(t *testing.T) {
 	}
 }
 
+// naiveMultiCounts enumerates every 2-to-MaxRuns-run state by brute force over window combinations, sharing no enumeration code with the engine; it is an independent oracle for state counts, sumB and sumRuns.
 func naiveMultiCounts(m *Model, minE float64) (counts [5]int, sumB, sumRuns float64) {
 	type win struct {
 		start, length int
@@ -149,6 +154,7 @@ func naiveMultiCounts(m *Model, minE float64) (counts [5]int, sumB, sumRuns floa
 	return counts, sumB, sumRuns
 }
 
+// TestPairDedupTinyCase pins the two-run count against a brute-force reference count, guarding the equal-length dedup that fixes SIST's double counting.
 func TestPairDedupTinyCase(t *testing.T) {
 	m := newTestModel(t, uniformSeq('A', 12), func(p *Params) {
 		p.Geometry = GeomCircular
@@ -183,6 +189,7 @@ func TestPairDedupTinyCase(t *testing.T) {
 	}
 }
 
+// TestMultiRunMatchesNaive pins multi-run state counts and AvgRuns to the naive oracle on small circular, linear and clamp cases.
 func TestMultiRunMatchesNaive(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -227,6 +234,7 @@ func TestMultiRunMatchesNaive(t *testing.T) {
 	}
 }
 
+// TestLengthBounds pins lengthBound's pruned length-tuple count to an independently pruned reference walk and the per-class caps.
 func TestLengthBounds(t *testing.T) {
 	const maxLen = 250
 	for r := 2; r <= 4; r++ {
@@ -269,11 +277,13 @@ func TestLengthBounds(t *testing.T) {
 	}
 }
 
+// islandSeq builds count repeats of an A-island followed by a G gap, giving well-separated low-energy melt sites.
 func islandSeq(island, gap, count int) []byte {
 	unit := strings.Repeat("A", island) + strings.Repeat("G", gap)
 	return []byte(strings.Repeat(unit, count))
 }
 
+// TestCapsOnVisitedStates pins that visited two-run states obey the MaxLen/2 and MaxLen caps and three- and four-run states the 200 cap, and that those caps actually bind.
 func TestCapsOnVisitedStates(t *testing.T) {
 	cases := []struct {
 		name                         string
@@ -330,6 +340,7 @@ func TestCapsOnVisitedStates(t *testing.T) {
 	}
 }
 
+// TestTwoPhaseWindow pins that the theta window is anchored on the true multi-run global minimum, fixing SIST's window that moves as it accumulates.
 func TestTwoPhaseWindow(t *testing.T) {
 	cases := []struct {
 		name           string
@@ -384,6 +395,7 @@ func TestTwoPhaseWindow(t *testing.T) {
 	}
 }
 
+// TestGuardAnchoredOnGlobalMinimum pins that the overflow guard uses the multi-run global minimum, not the one-run minimum.
 func TestGuardAnchoredOnGlobalMinimum(t *testing.T) {
 	seq := []byte(strings.Repeat(strings.Repeat("A", 50)+strings.Repeat("G", 20), 4))
 	build := func(runs int) *Model {
@@ -416,6 +428,7 @@ func TestGuardAnchoredOnGlobalMinimum(t *testing.T) {
 	}
 }
 
+// TestMultiRunGuards pins the overflow and underflow errors on the multi-run path.
 func TestMultiRunGuards(t *testing.T) {
 	m := newTestModel(t, uniformSeq('A', 2000), func(p *Params) {
 		p.Geometry = GeomClamp
@@ -436,6 +449,7 @@ func TestMultiRunGuards(t *testing.T) {
 	}
 }
 
+// TestMaxRunsValidation pins that NewModel accepts MaxRuns 1 and 4 and rejects 0, 5 and -1.
 func TestMaxRunsValidation(t *testing.T) {
 	for _, runs := range []int{0, 5, -1} {
 		p := DefaultParams()
@@ -454,6 +468,7 @@ func TestMaxRunsValidation(t *testing.T) {
 	}
 }
 
+// TestAvgRuns1RMode pins that MaxRuns 1 reports zero multi-run counts and AvgRuns equal to TransitionProb.
 func TestAvgRuns1RMode(t *testing.T) {
 	m := newTestModel(t, randomSeq(300, 5), func(p *Params) {
 		p.Geometry = GeomCircular

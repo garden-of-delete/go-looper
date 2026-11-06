@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// TestReadGenesFixture pins header parsing of name, chromosome, strand and range plus sequence length for synthetic200.
 func TestReadGenesFixture(t *testing.T) {
 	f, err := os.Open("../testdata/fixtures/synthetic200.fa")
 	if err != nil {
@@ -23,6 +24,7 @@ func TestReadGenesFixture(t *testing.T) {
 	}
 }
 
+// TestReadGenesMultiRecordLowercaseStrand pins multi-record parsing and uppercasing of lowercase bases.
 func TestReadGenesMultiRecordLowercaseStrand(t *testing.T) {
 	in := ">a range=chr1:10-13 strand=-\nacgt\n>b range=chr2:5-8 strand=+\nGGCC\n"
 	genes, err := ReadGenes(strings.NewReader(in))
@@ -34,6 +36,7 @@ func TestReadGenesMultiRecordLowercaseStrand(t *testing.T) {
 	}
 }
 
+// TestReadGenesRejectsInvalidBase pins that a non-ACGT base is an error naming the base, record and 1-based position.
 func TestReadGenesRejectsInvalidBase(t *testing.T) {
 	_, err := ReadGenes(strings.NewReader(">x range=c:1-4 strand=+\nACNT\n"))
 	if err == nil || !strings.Contains(err.Error(), "N") {
@@ -44,6 +47,7 @@ func TestReadGenesRejectsInvalidBase(t *testing.T) {
 	}
 }
 
+// TestReadGenesRejectsInvalidBaseReportsOriginalByte pins that the error reports the original lowercase byte, not its uppercased form.
 func TestReadGenesRejectsInvalidBaseReportsOriginalByte(t *testing.T) {
 	_, err := ReadGenes(strings.NewReader(">x range=c:1-4 strand=+\nACnT\n"))
 	if err == nil || !strings.Contains(err.Error(), "n") {
@@ -57,6 +61,7 @@ func TestReadGenesRejectsInvalidBaseReportsOriginalByte(t *testing.T) {
 	}
 }
 
+// TestReadGenesLongLine pins that a single 120000-base line is read without a line-length limit.
 func TestReadGenesLongLine(t *testing.T) {
 	long := strings.Repeat("ACGT", 30000)
 	genes, err := ReadGenes(strings.NewReader(">x range=c:1-120000 strand=+\n" + long + "\n"))
@@ -65,6 +70,7 @@ func TestReadGenesLongLine(t *testing.T) {
 	}
 }
 
+// TestOrientation pins strand-based orientation (+ complements, - reverses) and the + strand with invert case.
 func TestOrientation(t *testing.T) {
 	g := &Gene{Sequence: []byte("AACG"), Loc: Loci{Strand: "+"}}
 	g.ApplyOrientation(false, false, false)
@@ -83,6 +89,7 @@ func TestOrientation(t *testing.T) {
 	}
 }
 
+// TestApplyOrientationInvertFlagCombinesComplementAndReverse pins that invert alone reverse-complements a strandless gene.
 func TestApplyOrientationInvertFlagCombinesComplementAndReverse(t *testing.T) {
 	g := &Gene{Sequence: []byte("AACG"), Loc: Loci{Strand: ""}}
 	g.ApplyOrientation(false, false, true)
@@ -91,6 +98,7 @@ func TestApplyOrientationInvertFlagCombinesComplementAndReverse(t *testing.T) {
 	}
 }
 
+// TestApplyOrientationComplementFlagIdempotentWithInvert pins the C++ flag interaction where complement plus invert on a + strand complements twice and reverses once.
 func TestApplyOrientationComplementFlagIdempotentWithInvert(t *testing.T) {
 	g := &Gene{Sequence: []byte("AACG"), Loc: Loci{Strand: "+"}}
 	g.ApplyOrientation(true, false, true)
@@ -100,6 +108,7 @@ func TestApplyOrientationComplementFlagIdempotentWithInvert(t *testing.T) {
 	}
 }
 
+// TestReadGenesHeaderless pins that a header with no range or strand attributes yields zero-valued Loci.
 func TestReadGenesHeaderless(t *testing.T) {
 	genes, err := ReadGenes(strings.NewReader(">x\nACGT\n"))
 	if err != nil || len(genes) != 1 {

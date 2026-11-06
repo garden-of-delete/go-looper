@@ -161,4 +161,10 @@ python3 -c "import random; random.seed(1600); s=''.join(random.choice('ACGT') fo
 \`\`\`
 README
 
+echo "--- writing MANIFEST.sha256 ---"
+(
+    cd "$REPO_ROOT"
+    shasum -a 256 scripts/sist-1r.patch testdata/golden/sidd/*/stdout.txt
+) > "$GOLDEN_DIR/MANIFEST.sha256"
+
 echo "done. goldens written to $GOLDEN_DIR"

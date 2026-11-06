@@ -13,6 +13,7 @@ import (
 
 const repoRoot = ".."
 
+// readManifest parses a sha256sum-format manifest into a path-to-digest map, failing on malformed, duplicate or empty input.
 func readManifest(t *testing.T, path string) map[string]string {
 	t.Helper()
 	f, err := os.Open(path)
@@ -41,15 +42,18 @@ func readManifest(t *testing.T, path string) map[string]string {
 	return entries
 }
 
+// TestGoldenLineage pins every file listed in the manifest to its sha256 entry and requires only the stdout.txt files under the two sidd golden dirs to be listed; the six v1 rlooper/sim golden dirs are not covered. Each manifest must also list its SIST patches.
 func TestGoldenLineage(t *testing.T) {
 	for _, dir := range []string{"testdata/golden/sidd", "testdata/golden/sidd-multirun"} {
 		t.Run(dir, func(t *testing.T) {
 			entries := readManifest(t, filepath.Join(repoRoot, dir, "MANIFEST.sha256"))
+			patches := []string{"scripts/sist-1r.patch"}
 			if dir == "testdata/golden/sidd-multirun" {
-				for _, patch := range []string{"scripts/sist-dedup-fix.patch", "scripts/sist-probe.patch"} {
-					if _, ok := entries[patch]; !ok {
-						t.Errorf("%s is not listed in the manifest", patch)
-					}
+				patches = []string{"scripts/sist-dedup-fix.patch", "scripts/sist-probe.patch"}
+			}
+			for _, patch := range patches {
+				if _, ok := entries[patch]; !ok {
+					t.Errorf("%s is not listed in the manifest", patch)
 				}
 			}
 			for rel, want := range entries {

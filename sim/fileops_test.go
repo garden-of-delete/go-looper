@@ -10,6 +10,7 @@ import (
 	"testing"
 )
 
+// TestBufferedFileFlushesOnClose pins that Close flushes buffered data to disk.
 func TestBufferedFileFlushesOnClose(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "out.txt")
 	f, err := os.Create(path)
@@ -32,6 +33,7 @@ func TestBufferedFileFlushesOnClose(t *testing.T) {
 	}
 }
 
+// TestBufferedFileCloseReportsFlushError pins that Close reports a flush failure when the underlying file is already closed.
 func TestBufferedFileCloseReportsFlushError(t *testing.T) {
 	f, err := os.Create(filepath.Join(t.TempDir(), "out.txt"))
 	if err != nil {
@@ -49,6 +51,7 @@ func TestBufferedFileCloseReportsFlushError(t *testing.T) {
 	}
 }
 
+// TestFileOps pins that CreateOutputFiles creates all six files with the expected track names and that Close succeeds.
 func TestFileOps(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "golooper_test_*")
 	if err != nil {
@@ -105,6 +108,7 @@ func TestFileOps(t *testing.T) {
 	}
 }
 
+// checkWigHeader asserts the file's header is the wiggle track line for expectedName.
 func checkWigHeader(t *testing.T, file *bufferedFile, expectedName string) {
 	t.Helper()
 
@@ -130,6 +134,7 @@ func checkWigHeader(t *testing.T, file *bufferedFile, expectedName string) {
 	}
 }
 
+// checkBedHeader asserts the file's header is the BED track line for expectedName.
 func checkBedHeader(t *testing.T, file *bufferedFile, expectedName string) {
 	t.Helper()
 

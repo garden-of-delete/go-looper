@@ -9,6 +9,7 @@ import (
 	"golooper/internal/goldencmp"
 )
 
+// TestFormatSIST pins FormatSIST to C++ default float output, including nan and inf.
 func TestFormatSIST(t *testing.T) {
 	tests := []struct {
 		in   float64
@@ -45,6 +46,7 @@ func TestFormatSIST(t *testing.T) {
 	}
 }
 
+// assertReportParity asserts a single-run report is byte-identical to the SIST golden stdout for goldenCase.
 func assertReportParity(t *testing.T, goldenCase string, mutate func(*Params)) {
 	t.Helper()
 	p := DefaultParams()
@@ -79,18 +81,21 @@ func assertReportParity(t *testing.T, goldenCase string, mutate func(*Params)) {
 	t.Fatalf("line counts differ: golden %d, got %d", len(wantLines), len(gotLines))
 }
 
+// TestReportGoldenParity_ClampCopolyDefaults pins single-run byte parity for clamp copolymeric defaults.
 func TestReportGoldenParity_ClampCopolyDefaults(t *testing.T) {
 	assertReportParity(t, "clamp-copoly-defaults", func(p *Params) {
 		p.Geometry = GeomClamp
 	})
 }
 
+// TestReportGoldenParity_CircularCopolyDefaults pins single-run byte parity for circular copolymeric defaults.
 func TestReportGoldenParity_CircularCopolyDefaults(t *testing.T) {
 	assertReportParity(t, "circular-copoly-defaults", func(p *Params) {
 		p.Geometry = GeomCircular
 	})
 }
 
+// TestReportGoldenParity_ClampCopolyAlt pins single-run byte parity for clamp copolymeric with non-default temperature, salt, sigma and threshold.
 func TestReportGoldenParity_ClampCopolyAlt(t *testing.T) {
 	assertReportParity(t, "clamp-copoly-alt", func(p *Params) {
 		p.Geometry = GeomClamp
@@ -101,6 +106,7 @@ func TestReportGoldenParity_ClampCopolyAlt(t *testing.T) {
 	})
 }
 
+// assertMultiRunParity asserts a multi-run report matches the patched-SIST golden within a 1e-6 relative float tolerance.
 func assertMultiRunParity(t *testing.T, goldenCase, fixture string, mutate func(*Params)) {
 	t.Helper()
 	p := DefaultParams()
@@ -137,12 +143,14 @@ func assertMultiRunParity(t *testing.T, goldenCase, fixture string, mutate func(
 	}
 }
 
+// TestReportMultiRunParity_ClampCopolyDefaults pins multi-run parity for clamp copolymeric defaults.
 func TestReportMultiRunParity_ClampCopolyDefaults(t *testing.T) {
 	assertMultiRunParity(t, "mr-clamp-copoly-defaults", "pbr322.toy.fa", func(p *Params) {
 		p.Geometry = GeomClamp
 	})
 }
 
+// TestReportMultiRunParity_Hot pins multi-run parity at elevated temperature and threshold.
 func TestReportMultiRunParity_Hot(t *testing.T) {
 	assertMultiRunParity(t, "mr-clamp-copoly-hot", "pbr322.toy.fa", func(p *Params) {
 		p.Geometry = GeomClamp
@@ -152,6 +160,7 @@ func TestReportMultiRunParity_Hot(t *testing.T) {
 	})
 }
 
+// TestReportMultiRunParity_ClampNNDefaults pins multi-run parity for clamp nearest-neighbor defaults.
 func TestReportMultiRunParity_ClampNNDefaults(t *testing.T) {
 	assertMultiRunParity(t, "mr-clamp-nn-defaults", "pbr322.toy.fa", func(p *Params) {
 		p.Geometry = GeomClamp
@@ -159,12 +168,14 @@ func TestReportMultiRunParity_ClampNNDefaults(t *testing.T) {
 	})
 }
 
+// TestReportMultiRunParity_CircularCopolyDefaults pins multi-run parity for circular copolymeric defaults.
 func TestReportMultiRunParity_CircularCopolyDefaults(t *testing.T) {
 	assertMultiRunParity(t, "mr-circular-copoly-defaults", "pbr322.toy.fa", func(p *Params) {
 		p.Geometry = GeomCircular
 	})
 }
 
+// TestReportMultiRunParity_CircularNNSynth pins multi-run parity for circular nearest-neighbor on the synthetic 1600 sequence.
 func TestReportMultiRunParity_CircularNNSynth(t *testing.T) {
 	assertMultiRunParity(t, "mr-circular-nn-synth", "sidd_synth1600.fa", func(p *Params) {
 		p.Geometry = GeomCircular
@@ -172,6 +183,7 @@ func TestReportMultiRunParity_CircularNNSynth(t *testing.T) {
 	})
 }
 
+// TestReportMultiRunParity_CircularNNDefaults pins multi-run parity for circular nearest-neighbor defaults.
 func TestReportMultiRunParity_CircularNNDefaults(t *testing.T) {
 	assertMultiRunParity(t, "mr-circular-nn-defaults", "pbr322.toy.fa", func(p *Params) {
 		p.Geometry = GeomCircular
@@ -179,18 +191,21 @@ func TestReportMultiRunParity_CircularNNDefaults(t *testing.T) {
 	})
 }
 
+// TestReportMultiRunParity_ClampCopolySynth pins multi-run parity for clamp copolymeric on the synthetic 1600 sequence.
 func TestReportMultiRunParity_ClampCopolySynth(t *testing.T) {
 	assertMultiRunParity(t, "mr-clamp-copoly-synth", "sidd_synth1600.fa", func(p *Params) {
 		p.Geometry = GeomClamp
 	})
 }
 
+// TestReportMultiRunParity_OriginStraddle pins multi-run parity on a rotated sequence so runs straddle the origin.
 func TestReportMultiRunParity_OriginStraddle(t *testing.T) {
 	assertMultiRunParity(t, "mr-origin-straddle", "pbr322_rot310.toy.fa", func(p *Params) {
 		p.Geometry = GeomCircular
 	})
 }
 
+// TestReportMultiRunParity_ClampCopolyAlt pins multi-run parity for clamp copolymeric with non-default parameters.
 func TestReportMultiRunParity_ClampCopolyAlt(t *testing.T) {
 	assertMultiRunParity(t, "mr-clamp-copoly-alt", "pbr322.toy.fa", func(p *Params) {
 		p.Geometry = GeomClamp

@@ -12,6 +12,7 @@ const (
 
 type runSpan struct{ start, length int }
 
+// separated reports whether two runs are far enough apart, mirroring SIST's overlap(), including its deliberately asymmetric origin-crossing rule (at least 2 intact base pairs off-origin, at least 3 when a run reaches the last index, else at least 1).
 func separated(p1, n1, p2, n2 int, engLen int, circular bool) bool {
 	if !circular {
 		if p1+n1 > engLen || p2+n2 > engLen {
@@ -33,6 +34,7 @@ func separated(p1, n1, p2, n2 int, engLen int, circular bool) bool {
 	}
 }
 
+// classCap returns the cap on total melted length for a runs-run class: MaxLen for two runs, 200 for three and four.
 func classCap(maxLen, runs int) int {
 	if runs == 2 {
 		return maxLen
@@ -40,6 +42,7 @@ func classCap(maxLen, runs int) int {
 	return multiRunLenCap
 }
 
+// lengthBound returns the largest length the next run may take so that the remaining runs, each at least as long, still fit within total.
 func lengthBound(total, sum, remaining int) int {
 	return (total - sum) / remaining
 }
@@ -61,6 +64,7 @@ type classScan struct {
 	gres     float64
 }
 
+// newClassScan prepares a branch-and-bound scan of the runs-run class, caching the minimum single-run energy and minimum GRes used by its pruning bounds.
 func newClassScan(m *Model, lists [][]candidate, runs int, limit *float64, visit func(runs []runSpan, E float64)) *classScan {
 	s := &classScan{
 		m:        m,
@@ -84,6 +88,7 @@ func newClassScan(m *Model, lists [][]candidate, runs int, limit *float64, visit
 	return s
 }
 
+// run executes the scan, doing nothing when the class cannot fit under its length cap.
 func (s *classScan) run() {
 	if s.runs*s.m.MinLen > s.total || math.IsInf(s.minRun, 1) {
 		return
@@ -91,6 +96,7 @@ func (s *classScan) run() {
 	s.lengths(0, s.m.MinLen, 0, 0)
 }
 
+// lengths enumerates non-decreasing run-length tuples, pruning any prefix whose energy lower bound reaches *limit.
 func (s *classScan) lengths(level, prev, sum int, headSum float64) {
 	last := level == s.runs-1
 	hi := min(s.m.MaxLen, lengthBound(s.total, sum, s.runs-level))
@@ -124,6 +130,7 @@ func (s *classScan) lengths(level, prev, sum int, headSum float64) {
 	}
 }
 
+// positions enumerates start positions for the runs of the current length tuple, starting past the previous pick when lengths are equal so each unordered pair is visited once (fixing SIST's duplicate-pair bug). The runs slice handed to visit is a reused window into s and is overwritten on the next state; callers must not retain it.
 func (s *classScan) positions(level int, eSum float64) {
 	n := s.lens[level]
 	list := s.lists[n]
@@ -156,6 +163,7 @@ func (s *classScan) positions(level int, eSum float64) {
 	}
 }
 
+// clear reports whether the run at level is separated from every run already placed.
 func (s *classScan) clear(level, start, length int) bool {
 	for q := 0; q < level; q++ {
 		if !separated(s.spans[q].start, s.spans[q].length, start, length, s.m.EngLen, s.circular) {
@@ -165,6 +173,7 @@ func (s *classScan) clear(level, start, length int) bool {
 	return true
 }
 
+// globalMinimum returns the true minimum energy over all states of up to MaxRuns runs, found before any retention window is applied (phase one of the two-phase theta window, fixing SIST's moving window).
 func globalMinimum(m *Model, lists [][]candidate) float64 {
 	minE := minimumEnergy(m, lists)
 	for runs := 2; runs <= m.MaxRuns; runs++ {
@@ -175,6 +184,7 @@ func globalMinimum(m *Model, lists [][]candidate) float64 {
 	return minE
 }
 
+// forEachRetainedState visits every state within Threshold of the frozen global minimum minE (phase two of the theta window), single-run states first and then each multi-run class. The runs slice passed to visit is a reused window into the scan state and is overwritten on the next state; a visitor must copy it to retain it.
 func forEachRetainedState(m *Model, lists [][]candidate, minE float64, visit func(runs []runSpan, E, w float64)) {
 	var single [1]runSpan
 	forEachRetained(m, lists, minE, func(start, n int, E, w float64) {
@@ -191,6 +201,7 @@ func forEachRetainedState(m *Model, lists [][]candidate, minE float64, visit fun
 
 type compensatedSum struct{ sum, carry float64 }
 
+// add adds x using Neumaier compensated summation.
 func (c *compensatedSum) add(x float64) {
 	t := c.sum + x
 	if math.Abs(c.sum) >= math.Abs(x) {
@@ -201,6 +212,7 @@ func (c *compensatedSum) add(x float64) {
 	c.sum = t
 }
 
+// value returns the compensated total, falling back to the plain sum if the carry is not finite.
 func (c *compensatedSum) value() float64 {
 	if !isFinite(c.carry) {
 		return c.sum
@@ -212,6 +224,7 @@ type compensatedCell struct{ sumG, sumB compensatedSum }
 
 type compensatedMatrix [][]compensatedCell
 
+// newCompensatedMatrix allocates the per-length, per-start accumulator grid for the multi-run profile.
 func newCompensatedMatrix(m *Model) compensatedMatrix {
 	cells := make(compensatedMatrix, m.MaxLen+1)
 	for n := m.MinLen; n <= m.MaxLen; n++ {
@@ -220,6 +233,7 @@ func newCompensatedMatrix(m *Model) compensatedMatrix {
 	return cells
 }
 
+// add credits a state's weighted energy and weight to the cell of each of its runs.
 func (c compensatedMatrix) add(runs []runSpan, E, w float64) {
 	ew := float64(E * w)
 	for _, r := range runs {
@@ -229,6 +243,7 @@ func (c compensatedMatrix) add(runs []runSpan, E, w float64) {
 	}
 }
 
+// collapse reduces the compensated cells to plain cells so the shared profile accumulation can consume them.
 func (c compensatedMatrix) collapse() cellMatrix {
 	out := make(cellMatrix, len(c))
 	for n, row := range c {
@@ -243,6 +258,7 @@ func (c compensatedMatrix) collapse() cellMatrix {
 	return out
 }
 
+// runMulti computes the ensemble for MaxRuns above 1, using Neumaier-compensated sums because plain summation lost up to 6e-11 relative; runSingle keeps plain sums for byte parity.
 func runMulti(m *Model) (*Result, error) {
 	lists := candidates(m)
 	minE := globalMinimum(m, lists)

@@ -10,6 +10,7 @@ import (
 	"testing"
 )
 
+// relOrAbs returns the relative error of got against want, falling back to absolute error when want is zero.
 func relOrAbs(got, want float64) float64 {
 	if want == 0 {
 		return math.Abs(got - want)
@@ -17,10 +18,12 @@ func relOrAbs(got, want float64) float64 {
 	return rel(got, want)
 }
 
+// withinSignalTol reports whether got matches want within 1e-12 absolute or relative, whichever is larger.
 func withinSignalTol(got, want float64) bool {
 	return math.Abs(got-want) <= math.Max(1e-12, 1e-12*math.Abs(want))
 }
 
+// assertEnsembleEquivalent asserts that a parallel ensemble matches the serial one in LogZ, count, MFE window and energy, and MFE probability.
 func assertEnsembleEquivalent(t *testing.T, p, s EnsembleResult) {
 	t.Helper()
 	if rel(p.LogZ, s.LogZ) > 1e-12 {
@@ -37,6 +40,7 @@ func assertEnsembleEquivalent(t *testing.T, p, s EnsembleResult) {
 	}
 }
 
+// assertSignalsEquivalent asserts that parallel BPProb and AvgG match the serial signals within withinSignalTol.
 func assertSignalsEquivalent(t *testing.T, p, s Signals) {
 	t.Helper()
 	for i := range s.BPProb {
@@ -51,6 +55,7 @@ func assertSignalsEquivalent(t *testing.T, p, s Signals) {
 	}
 }
 
+// assertResidualsEquivalent asserts that every parallel residual matches the serial one to 1e-12.
 func assertResidualsEquivalent(t *testing.T, p, s Residuals) {
 	t.Helper()
 	if relOrAbs(p.Twist, s.Twist) > 1e-12 {
@@ -70,6 +75,7 @@ func assertResidualsEquivalent(t *testing.T, p, s Residuals) {
 	}
 }
 
+// TestParallelMatchesSerial pins that 8 workers reproduce the 1-worker ensemble and signals on the linear fixture.
 func TestParallelMatchesSerial(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
@@ -82,6 +88,7 @@ func TestParallelMatchesSerial(t *testing.T) {
 	assertSignalsEquivalent(t, ps, ss)
 }
 
+// TestCircularParallelMatchesSerial pins that 8 workers reproduce the 1-worker ensemble and signals in circular mode.
 func TestCircularParallelMatchesSerial(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
@@ -94,6 +101,7 @@ func TestCircularParallelMatchesSerial(t *testing.T) {
 	assertSignalsEquivalent(t, ps, ss)
 }
 
+// TestParallelMoreWorkersThanRows pins that requesting more workers than rows is clamped and still counts all 21 GATTACA structures.
 func TestParallelMoreWorkersThanRows(t *testing.T) {
 	m := NewDefaultModel()
 	ens := ComputeEnsemble([]byte("GATTACA"), m, Windows{MinLength: 2, Workers: 64})
@@ -102,6 +110,7 @@ func TestParallelMoreWorkersThanRows(t *testing.T) {
 	}
 }
 
+// TestParallelEmptyChunks pins that workers whose rows hold no windows (MinLength 8 on 10 bases, linear) merge as identity.
 func TestParallelEmptyChunks(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("AAAAAAAAAA")
@@ -117,6 +126,7 @@ func TestParallelEmptyChunks(t *testing.T) {
 	assertSignalsEquivalent(t, ps, ss)
 }
 
+// TestCircularParallelEmptyChunks pins the empty-chunk merge behavior in circular mode, where window counts differ per row.
 func TestCircularParallelEmptyChunks(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("AAAAAAAAAA")
@@ -132,6 +142,7 @@ func TestCircularParallelEmptyChunks(t *testing.T) {
 	assertSignalsEquivalent(t, ps, ss)
 }
 
+// TestParallelDeterministic pins that repeated 4-worker runs give bit-identical ensemble and signals, so the merge order is fixed.
 func TestParallelDeterministic(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
@@ -159,6 +170,7 @@ func TestParallelDeterministic(t *testing.T) {
 	}
 }
 
+// TestCircularParallelDeterministic pins bit-identical repeated 4-worker results in circular mode.
 func TestCircularParallelDeterministic(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
@@ -186,6 +198,7 @@ func TestCircularParallelDeterministic(t *testing.T) {
 	}
 }
 
+// TestParallelMFETieBreakMatchesSerial pins that a many-way energy tie resolves to the same MFE window in parallel as in serial.
 func TestParallelMFETieBreakMatchesSerial(t *testing.T) {
 	m := NewDefaultModel()
 	m.Homopolymer, m.OverrideEnergy = true, 0.5
@@ -197,6 +210,7 @@ func TestParallelMFETieBreakMatchesSerial(t *testing.T) {
 	assertEnsembleEquivalent(t, parallel, serial)
 }
 
+// TestParallelResidualsMatchesSerial pins that parallel residuals match serial residuals on the linear fixture.
 func TestParallelResidualsMatchesSerial(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
@@ -207,6 +221,7 @@ func TestParallelResidualsMatchesSerial(t *testing.T) {
 	assertResidualsEquivalent(t, p, s)
 }
 
+// TestCircularResidualsMatchesSerial pins parallel/serial residual agreement on a circle and that circular residuals differ from linear ones, proving the circular bounds engaged.
 func TestCircularResidualsMatchesSerial(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
@@ -228,6 +243,7 @@ func TestCircularResidualsMatchesSerial(t *testing.T) {
 	}
 }
 
+// TestParallelResidualsDeterministic pins that repeated 4-worker residual runs are bit-identical.
 func TestParallelResidualsDeterministic(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
@@ -242,6 +258,7 @@ func TestParallelResidualsDeterministic(t *testing.T) {
 	}
 }
 
+// TestParallelResidualsOversubscription pins that residuals with 64 workers on 7 bases match the serial result.
 func TestParallelResidualsOversubscription(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("GATTACA")
@@ -252,6 +269,7 @@ func TestParallelResidualsOversubscription(t *testing.T) {
 	assertResidualsEquivalent(t, p, s)
 }
 
+// loadPfc53ForBench loads and orients the first record of the pfc53 benchmark sequence.
 func loadPfc53ForBench(b *testing.B) *Gene {
 	b.Helper()
 	f, err := os.Open("../res/pfc53_full.fa")
@@ -268,6 +286,7 @@ func loadPfc53ForBench(b *testing.B) *Gene {
 	return g
 }
 
+// BenchmarkEnsemblePfc53 measures ComputeEnsemble on pfc53 with one worker and with all CPUs.
 func BenchmarkEnsemblePfc53(b *testing.B) {
 	g := loadPfc53ForBench(b)
 	m := NewDefaultModel()
@@ -280,6 +299,7 @@ func BenchmarkEnsemblePfc53(b *testing.B) {
 	}
 }
 
+// BenchmarkSignalsPfc53 measures ComputeSignals on pfc53 with one worker and with all CPUs.
 func BenchmarkSignalsPfc53(b *testing.B) {
 	g := loadPfc53ForBench(b)
 	m := NewDefaultModel()

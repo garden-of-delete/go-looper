@@ -16,6 +16,7 @@ import (
 	"golooper/rlooper"
 )
 
+// readWigValues returns the data values of a WIG file, skipping track, browser, comment and fixedStep lines.
 func readWigValues(t *testing.T, path string) []float64 {
 	t.Helper()
 	f, err := os.Open(path)
@@ -43,6 +44,7 @@ func readWigValues(t *testing.T, path string) []float64 {
 	return values
 }
 
+// compareWig asserts got matches the values of the WIG file at path within checkTol.
 func compareWig(t *testing.T, got []float64, path string) {
 	t.Helper()
 	want := readWigValues(t, path)
@@ -54,6 +56,7 @@ func compareWig(t *testing.T, got []float64, path string) {
 	}
 }
 
+// onesSpan returns the half-open index range of the first run of exactly 1 in an MFE signal, failing if there is none.
 func onesSpan(t *testing.T, signal []float64) (start, end int) {
 	t.Helper()
 	start = -1
@@ -73,6 +76,7 @@ func onesSpan(t *testing.T, signal []float64) (start, end int) {
 	return start, end
 }
 
+// compareMFEWig compares MFE spans with the golden, accepting a different span only if it is an equal-energy tie (C++ and Go may pick differently).
 func compareMFEWig(t *testing.T, ens ensembleTieInfo, got []float64, path string) {
 	t.Helper()
 	gotStart, gotEnd := onesSpan(t, got)
@@ -95,6 +99,7 @@ func compareMFEWig(t *testing.T, ens ensembleTieInfo, got []float64, path string
 	t.Logf("%s: tied MFE, C++ chose window (%d,%d), Go chose (%d,%d), energy %g", path, wantStart, wantEnd, gotStart, gotEnd, ens.mfeEnergy)
 }
 
+// parsePGroundState extracts the value of the P(ground state)= line from stdout.
 func parsePGroundState(t *testing.T, text string) float64 {
 	t.Helper()
 	for _, line := range strings.Split(text, "\n") {
@@ -114,6 +119,7 @@ func parsePGroundState(t *testing.T, text string) float64 {
 
 const e2eWorkers = 4
 
+// runEnsembleCase runs RunEnsembleSim with e2eWorkers workers and returns the output directory and captured stdout.
 func runEnsembleCase(t *testing.T, cfg *config.Config) (dir string, stdout string) {
 	t.Helper()
 	var buf bytes.Buffer
@@ -123,6 +129,7 @@ func runEnsembleCase(t *testing.T, cfg *config.Config) (dir string, stdout strin
 	return filepath.Dir(cfg.OutfileName), buf.String()
 }
 
+// TestRunEnsembleSimAgainstGoldenDefaults is the end-to-end golden check of stdout and output files for default parameters.
 func TestRunEnsembleSimAgainstGoldenDefaults(t *testing.T) {
 	dir := t.TempDir()
 	sensitivity := -1
@@ -229,6 +236,7 @@ func TestRunEnsembleSimAgainstGoldenDefaults(t *testing.T) {
 	}
 }
 
+// TestRunEnsembleSimAgainstGoldenSigma010 is the end-to-end golden check at superhelical density -0.10.
 func TestRunEnsembleSimAgainstGoldenSigma010(t *testing.T) {
 	dir := t.TempDir()
 	sigma := -0.10
@@ -252,6 +260,7 @@ func TestRunEnsembleSimAgainstGoldenSigma010(t *testing.T) {
 	compareMFEWig(t, ens, readWigValues(t, filepath.Join(dir, "out_mfe.wig")), filepath.Join(goldenDir, "out_mfe.wig"))
 }
 
+// TestRunEnsembleSimAgainstGoldenNauto is the end-to-end golden check with the domain size set automatically from the sequence length.
 func TestRunEnsembleSimAgainstGoldenNauto(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{
@@ -274,6 +283,7 @@ func TestRunEnsembleSimAgainstGoldenNauto(t *testing.T) {
 	compareMFEWig(t, ens, readWigValues(t, filepath.Join(dir, "out_mfe.wig")), filepath.Join(goldenDir, "out_mfe.wig"))
 }
 
+// TestRunEnsembleSimAgainstGoldenHomopolymer05 is the end-to-end golden check with the homopolymer energy override of 0.5.
 func TestRunEnsembleSimAgainstGoldenHomopolymer05(t *testing.T) {
 	dir := t.TempDir()
 	homopolymer := 0.5
@@ -297,6 +307,7 @@ func TestRunEnsembleSimAgainstGoldenHomopolymer05(t *testing.T) {
 	compareMFEWig(t, ens, readWigValues(t, filepath.Join(dir, "out_mfe.wig")), filepath.Join(goldenDir, "out_mfe.wig"))
 }
 
+// TestRunEnsembleSimAgainstGoldenPfc53 is the end-to-end golden check on the pfc53 sequence with local average energy enabled.
 func TestRunEnsembleSimAgainstGoldenPfc53(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{
@@ -314,6 +325,7 @@ func TestRunEnsembleSimAgainstGoldenPfc53(t *testing.T) {
 	compareMFEWig(t, ens, readWigValues(t, filepath.Join(dir, "out_mfe.wig")), filepath.Join(goldenDir, "out_mfe.wig"))
 }
 
+// TestResolveDomainSizeExplicitCircularNote pins that an explicit N differing from a circular length wins and prints the exact stderr note.
 func TestResolveDomainSizeExplicitCircularNote(t *testing.T) {
 	n := 1500
 	cfg := &config.Config{SuperhelicityDomain: &n, Circular: true}
@@ -331,6 +343,7 @@ func TestResolveDomainSizeExplicitCircularNote(t *testing.T) {
 	}
 }
 
+// TestResolveDomainSizeExplicitLinearSilent pins that an explicit N on a linear sequence is applied silently.
 func TestResolveDomainSizeExplicitLinearSilent(t *testing.T) {
 	n := 1500
 	cfg := &config.Config{SuperhelicityDomain: &n}
@@ -347,6 +360,7 @@ func TestResolveDomainSizeExplicitLinearSilent(t *testing.T) {
 	}
 }
 
+// TestResolveDomainSizeAutoLinear pins that auto domain size sets N to the sequence length.
 func TestResolveDomainSizeAutoLinear(t *testing.T) {
 	cfg := &config.Config{AutoDomainSize: true}
 	m := rlooper.NewDefaultModel()
@@ -362,6 +376,7 @@ func TestResolveDomainSizeAutoLinear(t *testing.T) {
 	}
 }
 
+// TestResolveDomainSizeCircularDefault pins that a circular run defaults N to the sequence length.
 func TestResolveDomainSizeCircularDefault(t *testing.T) {
 	cfg := &config.Config{Circular: true}
 	m := rlooper.NewDefaultModel()
@@ -377,6 +392,7 @@ func TestResolveDomainSizeCircularDefault(t *testing.T) {
 	}
 }
 
+// TestRunEnsembleSimCircular pins the circular structure count of 39600 (200*198) and agreement of the wigs with a direct circular engine computation.
 func TestRunEnsembleSimCircular(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{
@@ -423,6 +439,7 @@ func TestRunEnsembleSimCircular(t *testing.T) {
 	}
 }
 
+// circularWrappedMFEFixture rotates the fixture so its unique circular MFE wraps the origin, failing if the minimum is tied.
 func circularWrappedMFEFixture(t *testing.T) []byte {
 	t.Helper()
 	g := loadOrientedFixture(t)
@@ -447,6 +464,7 @@ func circularWrappedMFEFixture(t *testing.T) []byte {
 	return rot
 }
 
+// writeCircularFasta writes a one-gene FASTA with a UCSC range= header for the given strand, pre-transforming seq so orientation handling restores it.
 func writeCircularFasta(t *testing.T, dir, name string, seq []byte, strand string) string {
 	t.Helper()
 	g := &rlooper.Gene{Sequence: append([]byte(nil), seq...)}
@@ -467,6 +485,7 @@ func writeCircularFasta(t *testing.T, dir, name string, seq []byte, strand strin
 	return path
 }
 
+// TestRunEnsembleSimCircularAllOutputFlags pins consistency of every output on a circular wrapped MFE for both strands.
 func TestRunEnsembleSimCircularAllOutputFlags(t *testing.T) {
 	rotatedSeq := circularWrappedMFEFixture(t)
 	n := len(rotatedSeq)
@@ -586,6 +605,7 @@ func TestRunEnsembleSimCircularAllOutputFlags(t *testing.T) {
 	}
 }
 
+// TestModelFromConfigFlags pins that ModelFromConfig and minLengthFromConfig apply config overrides.
 func TestModelFromConfigFlags(t *testing.T) {
 	nucleation := 12.5
 	unconstrained := true
@@ -609,6 +629,7 @@ func TestModelFromConfigFlags(t *testing.T) {
 	}
 }
 
+// TestWarnGeneAnomalies pins the unknown-strand and range-length warnings and silence for a well-formed gene.
 func TestWarnGeneAnomalies(t *testing.T) {
 	var buf bytes.Buffer
 	unknownStrand := &rlooper.Gene{
@@ -645,6 +666,7 @@ func TestWarnGeneAnomalies(t *testing.T) {
 	}
 }
 
+// TestProcessGeneDumpValidatesStrandBeforeCreatingFile pins that a dump on an unstranded gene errors before the dump file is created.
 func TestProcessGeneDumpValidatesStrandBeforeCreatingFile(t *testing.T) {
 	dir := t.TempDir()
 	g := &rlooper.Gene{
@@ -675,6 +697,7 @@ func TestProcessGeneDumpValidatesStrandBeforeCreatingFile(t *testing.T) {
 	}
 }
 
+// TestRunEnsembleSimZeroGenes pins the no genes found error on an empty input.
 func TestRunEnsembleSimZeroGenes(t *testing.T) {
 	dir := t.TempDir()
 	emptyFasta := filepath.Join(dir, "empty.fa")
@@ -697,6 +720,7 @@ type ensembleTieInfo struct {
 	mfeEnergy float64
 }
 
+// loadEnsembleForTie recomputes the ensemble independently of RunEnsembleSim to supply structure energies for MFE tie resolution.
 func loadEnsembleForTie(t *testing.T, cfg *config.Config) ensembleTieInfo {
 	t.Helper()
 	f, err := os.Open(cfg.InfileName)
@@ -723,6 +747,7 @@ func loadEnsembleForTie(t *testing.T, cfg *config.Config) ensembleTieInfo {
 	return ensembleTieInfo{gene: g, recs: recs, mfeEnergy: ens.MFE.Energy}
 }
 
+// equalWindows reports whether two window lists are identical in order.
 func equalWindows(a, b [][2]int64) bool {
 	if len(a) != len(b) {
 		return false

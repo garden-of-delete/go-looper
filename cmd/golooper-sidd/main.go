@@ -24,6 +24,7 @@ type options struct {
 	params                  sidd.Params
 }
 
+// parseDomain converts --N to the SIDD domain size, mapping "auto" to 0 and rejecting anything but a positive integer.
 func parseDomain(s string) (float64, error) {
 	if s == "auto" {
 		return 0, nil
@@ -35,6 +36,7 @@ func parseDomain(s string) (float64, error) {
 	return float64(n), nil
 }
 
+// parseMaxRuns parses --max-runs, accepting only integers 1 through 4 (SIST's structural cap).
 func parseMaxRuns(s string) (int, error) {
 	n, err := strconv.Atoi(s)
 	if err != nil || n < 1 || n > 4 {
@@ -43,6 +45,7 @@ func parseMaxRuns(s string) (int, error) {
 	return n, nil
 }
 
+// resolveParams folds the flags into a sidd.Params, rejecting --clamp with --circular and out-of-range --N or --max-runs.
 func (o *options) resolveParams() (sidd.Params, error) {
 	p := o.params
 	if o.clamp && o.circular {
@@ -66,6 +69,7 @@ func (o *options) resolveParams() (sidd.Params, error) {
 	return p, nil
 }
 
+// run reads the single input record, runs the SIDD model, writes the report to -o or stdout, and optionally writes the bpprob and gx wig tracks.
 func (o *options) run(cmd *cobra.Command) error {
 	p, err := o.resolveParams()
 	if err != nil {
@@ -121,6 +125,7 @@ func (o *options) run(cmd *cobra.Command) error {
 	return nil
 }
 
+// readSequence parses FASTA from r, accepting SIST-style headerless raw sequence by synthesizing a header from name.
 func readSequence(r io.Reader, name string) ([]*rlooper.Gene, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -132,10 +137,12 @@ func readSequence(r io.Reader, name string) ([]*rlooper.Gene, error) {
 	return rlooper.ReadGenes(bytes.NewReader(data))
 }
 
+// baseName returns the file's base name with whitespace runs replaced by underscores, so it is a valid FASTA/wig token.
 func baseName(path string) string {
 	return strings.Join(strings.Fields(filepath.Base(path)), "_")
 }
 
+// setTrackLocation fills the gene's chrom/start/end when the input had no UCSC range= header, so wig output is valid.
 func setTrackLocation(g *rlooper.Gene, infile string) {
 	if g.Loc.Chromosome != "" {
 		return
@@ -148,6 +155,7 @@ func setTrackLocation(g *rlooper.Gene, infile string) {
 	g.Loc.End = int64(len(g.Sequence))
 }
 
+// startsWithFasta reports whether the first non-blank line begins a FASTA record or comment ('>' or ';').
 func startsWithFasta(data []byte) bool {
 	for len(data) > 0 {
 		line, rest, _ := bytes.Cut(data, []byte("\n"))
@@ -159,6 +167,7 @@ func startsWithFasta(data []byte) bool {
 	return false
 }
 
+// writeFile creates name, runs write on it, and returns the first write or close error.
 func writeFile(name string, write func(*os.File) error) error {
 	f, err := os.Create(name)
 	if err != nil {
@@ -171,6 +180,7 @@ func writeFile(name string, write func(*os.File) error) error {
 	return f.Close()
 }
 
+// newRootCmd builds the golooper-sidd command with its flags; --sigma is signed (SIST's -s is a positive magnitude) and --max-runs is a go-looper extension absent from SIST.
 func newRootCmd() *cobra.Command {
 	o := &options{params: sidd.DefaultParams()}
 	cmd := &cobra.Command{
@@ -203,6 +213,7 @@ func newRootCmd() *cobra.Command {
 	return cmd
 }
 
+// main runs golooper-sidd and exits with status 1 on any command error.
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
 		os.Exit(1)

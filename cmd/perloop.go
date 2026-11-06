@@ -30,6 +30,7 @@ generates output at the specified path.`,
 	},
 }
 
+// validateSigmaRange rejects a non-positive step or min > max; min == max is a valid single-point sweep.
 func validateSigmaRange(min, max, step float64) error {
 	if step <= 0 {
 		return fmt.Errorf("--sigma-step must be > 0, got %g", step)
@@ -40,6 +41,7 @@ func validateSigmaRange(min, max, step float64) error {
 	return nil
 }
 
+// init declares the sigma sweep flags (sigma-min and sigma-max required) and registers the perloop subcommand.
 func init() {
 	perloopCmd.Flags().Float64Var(&sigmaMin, "sigma-min", 0, "lower bound of the superhelicity sweep")
 	perloopCmd.Flags().Float64Var(&sigmaMax, "sigma-max", 0, "upper bound of the superhelicity sweep")

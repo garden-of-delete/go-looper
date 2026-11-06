@@ -2,6 +2,7 @@ package cmd
 
 import "testing"
 
+// TestParseSuperhelicityDomain pins that --N accepts "auto" or a positive integer and rejects zero, negatives, non-digits, decimals and the empty string.
 func TestParseSuperhelicityDomain(t *testing.T) {
 	cases := []struct {
 		in        string
@@ -34,6 +35,7 @@ func TestParseSuperhelicityDomain(t *testing.T) {
 	}
 }
 
+// TestValidateMinLength pins the boundary at 2: 2 and above pass, 1 and below fail.
 func TestValidateMinLength(t *testing.T) {
 	cases := []struct {
 		n       int
@@ -53,6 +55,7 @@ func TestValidateMinLength(t *testing.T) {
 	}
 }
 
+// TestCircularFlagAccepted pins that --circular parses and sets cfg.Circular.
 func TestCircularFlagAccepted(t *testing.T) {
 	defer func() { cfg.Circular = false }()
 	rootCmd.SetArgs([]string{"show-config", "--circular"})
@@ -66,6 +69,7 @@ func TestCircularFlagAccepted(t *testing.T) {
 	}
 }
 
+// TestValidateSigmaRange pins rejection of zero and negative steps and of min > max, and acceptance of min == max.
 func TestValidateSigmaRange(t *testing.T) {
 	cases := []struct {
 		name           string

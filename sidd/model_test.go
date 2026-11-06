@@ -9,6 +9,7 @@ import (
 	"testing"
 )
 
+// loadPBR322 reads the pBR322 toy fixture sequence and checks its 4361-base length.
 func loadPBR322(t *testing.T) []byte {
 	t.Helper()
 	data, err := os.ReadFile("../testdata/fixtures/pbr322.toy.fa")
@@ -27,10 +28,12 @@ func loadPBR322(t *testing.T) []byte {
 	return seq
 }
 
+// relDiff returns the relative difference of a and b.
 func relDiff(a, b float64) float64 {
 	return math.Abs(a-b) / math.Max(math.Abs(a), math.Abs(b))
 }
 
+// TestModelDefaults pins the DefaultParams values.
 func TestModelDefaults(t *testing.T) {
 	p := DefaultParams()
 	want := Params{Sigma: -0.06, Temperature: 310, Salt: 0.01, Threshold: 12, MinLen: 1, MaxLen: 250, MaxRuns: 4}
@@ -39,6 +42,7 @@ func TestModelDefaults(t *testing.T) {
 	}
 }
 
+// TestModelPinnedCoefficients pins BAT, BGC and Alpha at the defaults to six significant digits.
 func TestModelPinnedCoefficients(t *testing.T) {
 	p := DefaultParams()
 	p.Geometry = GeomClamp
@@ -57,6 +61,7 @@ func TestModelPinnedCoefficients(t *testing.T) {
 	}
 }
 
+// TestModelClampGeometry pins the 50-base G pad, EngLen and the automatic and overridden N.
 func TestModelClampGeometry(t *testing.T) {
 	seq := loadPBR322(t)
 	p := DefaultParams()
@@ -85,6 +90,7 @@ func TestModelClampGeometry(t *testing.T) {
 	}
 }
 
+// TestModelCircularGeometry pins circular lengths and the MaxLen-below-EngLen requirement.
 func TestModelCircularGeometry(t *testing.T) {
 	seq := loadPBR322(t)
 	p := DefaultParams()
@@ -102,6 +108,7 @@ func TestModelCircularGeometry(t *testing.T) {
 	}
 }
 
+// TestModelValidation pins that each invalid parameter or sequence is rejected by NewModel.
 func TestModelValidation(t *testing.T) {
 	seq := []byte("ACGTACGTAC")
 	cases := map[string]func(*Params) []byte{
@@ -129,6 +136,7 @@ func TestModelValidation(t *testing.T) {
 	}
 }
 
+// TestModelGResMatchesGround pins GRes(0) to GroundEnergy and that GRes varies with n.
 func TestModelGResMatchesGround(t *testing.T) {
 	p := DefaultParams()
 	p.Geometry = GeomClamp
@@ -144,6 +152,7 @@ func TestModelGResMatchesGround(t *testing.T) {
 	}
 }
 
+// TestModelCopolymericWindow pins copolymeric WindowEnergy as the BAT/BGC base counts, including a window that wraps the origin.
 func TestModelCopolymericWindow(t *testing.T) {
 	p := DefaultParams()
 	p.Geometry = GeomCircular
@@ -163,6 +172,7 @@ func TestModelCopolymericWindow(t *testing.T) {
 	}
 }
 
+// TestModelNearestNeighbor pins the nearest-neighbor per-base energies and a wrapped window sum against an independent computation.
 func TestModelNearestNeighbor(t *testing.T) {
 	seq := []byte("ACGTTGCAAGCT")
 	p := DefaultParams()
@@ -199,6 +209,7 @@ func TestModelNearestNeighbor(t *testing.T) {
 	}
 }
 
+// TestModelPositiveSigmaMessage pins the error text explaining SIST's positive-magnitude sigma convention.
 func TestModelPositiveSigmaMessage(t *testing.T) {
 	p := DefaultParams()
 	p.Sigma = 0.06
@@ -208,6 +219,19 @@ func TestModelPositiveSigmaMessage(t *testing.T) {
 	}
 }
 
+// TestModelClampMaxLenMessage pins that the MaxLen error reports the effective clamp bound.
+func TestModelClampMaxLenMessage(t *testing.T) {
+	p := DefaultParams()
+	p.Geometry = GeomClamp
+	p.MaxLen = 250
+	_, err := NewModel(randomSeq(100, 5), p)
+	want := "must be below 150 (100 bases plus the 50-base clamp)"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("error = %v, want it to contain %q", err, want)
+	}
+}
+
+// TestModelLinearMaxLenCap pins that linear geometry caps MaxLen at the sequence length.
 func TestModelLinearMaxLenCap(t *testing.T) {
 	seq := randomSeq(400, 4)
 	p := DefaultParams()

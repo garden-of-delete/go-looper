@@ -12,6 +12,7 @@ type EnergyModel struct {
 	Unconstrained                           bool
 }
 
+// NewDefaultModel returns the rlooper2 default energy model with derived K and Alpha already computed.
 func NewDefaultModel() *EnergyModel {
 	m := &EnergyModel{N: 1500, A: 1 / 10.4, C: 1.8, T: 310, Nucleation: 10, Sigma: -0.07,
 		BP: NewBpEnergiesReasonableDefaults()}
@@ -19,17 +20,28 @@ func NewDefaultModel() *EnergyModel {
 	return m
 }
 
+// recompute refreshes K and Alpha, which depend on N, T, A and Sigma; every setter must call it.
 func (m *EnergyModel) recompute() {
 	m.K = 2200 * GasConstant * m.T / m.N
 	m.Alpha = m.N * m.Sigma * m.A
 }
 
-func (m *EnergyModel) SetN(n float64)     { m.N = n; m.recompute() }
-func (m *EnergyModel) SetSigma(s float64) { m.Sigma = s; m.recompute() }
-func (m *EnergyModel) SetT(t float64)     { m.T = t; m.recompute() }
-func (m *EnergyModel) SetA(a float64)     { m.A = a; m.recompute() }
-func (m *EnergyModel) RT() float64        { return GasConstant * m.T }
+// SetN sets the superhelical domain size N and refreshes the derived K and Alpha.
+func (m *EnergyModel) SetN(n float64) { m.N = n; m.recompute() }
 
+// SetSigma sets the initial superhelical density Sigma and refreshes the derived Alpha.
+func (m *EnergyModel) SetSigma(s float64) { m.Sigma = s; m.recompute() }
+
+// SetT sets the temperature T in kelvin and refreshes the derived K.
+func (m *EnergyModel) SetT(t float64) { m.T = t; m.recompute() }
+
+// SetA sets the helical repeat constant A (turns per base) and refreshes the derived Alpha.
+func (m *EnergyModel) SetA(a float64) { m.A = a; m.recompute() }
+
+// RT returns the thermal energy GasConstant*T in kcal/mol.
+func (m *EnergyModel) RT() float64 { return GasConstant * m.T }
+
+// SupercoilingEnergy returns the superhelical energy of an R-loop spanning the given number of bases, or 0 when Unconstrained.
 func (m *EnergyModel) SupercoilingEnergy(bases int) float64 {
 	if m.Unconstrained {
 		return 0
@@ -39,10 +51,12 @@ func (m *EnergyModel) SupercoilingEnergy(bases int) float64 {
 	return 2 * math.Pi * math.Pi * m.C * m.K * q * q / (4*math.Pi*math.Pi*m.C + m.K*n)
 }
 
+// GroundStateEnergy returns the energy of the unlooped state: the residual supercoiling term minus the nucleation energy.
 func (m *EnergyModel) GroundStateEnergy() float64 {
 	return m.K*m.Alpha*m.Alpha/2 - m.Nucleation
 }
 
+// StepEnergy returns the RNA:DNA hybrid energy for the dinucleotide step b0,b1 (any base other than C, G or T is treated as A), or OverrideEnergy in Homopolymer mode.
 func (m *EnergyModel) StepEnergy(b0, b1 byte) float64 {
 	if m.Homopolymer {
 		return m.OverrideEnergy
@@ -95,6 +109,7 @@ func (m *EnergyModel) StepEnergy(b0, b1 byte) float64 {
 	}
 }
 
+// prefixBP returns cumulative step energies where p[i] is the sum of steps up to base i, extended to 2n-1 entries for a circular sequence so wrapped windows are a prefix difference.
 func prefixBP(seq []byte, m *EnergyModel, circular bool) []float64 {
 	n := len(seq)
 	length := n

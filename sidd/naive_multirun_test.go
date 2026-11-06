@@ -16,6 +16,7 @@ const (
 
 type anchorSum struct{ sum, carry float64 }
 
+// add is a separate type running the same Neumaier algorithm as compensatedSum. It checks that production wiring and accumulation order match the anchor, not that the compensation step itself is correct: a sign error in the algorithm would appear on both sides and still pass the comparison.
 func (a *anchorSum) add(x float64) {
 	t := a.sum + x
 	if math.Abs(a.sum) >= math.Abs(x) {
@@ -26,8 +27,10 @@ func (a *anchorSum) add(x float64) {
 	a.sum = t
 }
 
+// value returns the compensated total.
 func (a *anchorSum) value() float64 { return a.sum + a.carry }
 
+// anchorClose is the NaN-safe relative comparison for anchors: exact equality, or difference within anchorTolerance of the larger magnitude.
 func anchorClose(got, want float64) bool {
 	return got == want || math.Abs(got-want) <= anchorTolerance*math.Max(math.Abs(got), math.Abs(want))
 }
@@ -49,6 +52,7 @@ type anchorSpace struct {
 	windows  [][]float64
 }
 
+// newAnchorSpace precomputes window energies for the brute-force oracle's state space.
 func newAnchorSpace(m *Model, maxRuns int) *anchorSpace {
 	s := &anchorSpace{m: m, maxRuns: maxRuns, circular: m.Geometry != GeomLinear}
 	s.windows = make([][]float64, m.MaxLen+1)
@@ -61,6 +65,7 @@ func newAnchorSpace(m *Model, maxRuns int) *anchorSpace {
 	return s
 }
 
+// starts returns the number of valid start positions for a run of length n.
 func (s *anchorSpace) starts(n int) int {
 	if s.circular {
 		return s.m.EngLen
@@ -68,6 +73,7 @@ func (s *anchorSpace) starts(n int) int {
 	return s.m.SeqLen - n + 1
 }
 
+// apart reports whether two runs are separated, derived independently of separated().
 func (s *anchorSpace) apart(a, b anchorRun) bool {
 	if !s.circular {
 		if a.start > b.start {
@@ -82,6 +88,7 @@ func (s *anchorSpace) apart(a, b anchorRun) bool {
 	return s.arcOK(a, b) && s.arcOK(b, a)
 }
 
+// arcOK checks the gap after from before to, applying the asymmetric origin-crossing minimums (3 past the last index, 1 across the origin, else 2).
 func (s *anchorSpace) arcOK(from, to anchorRun) bool {
 	size := s.m.EngLen
 	next := from.start + from.length
@@ -96,6 +103,7 @@ func (s *anchorSpace) arcOK(from, to anchorRun) bool {
 	}
 }
 
+// capsHold reports whether a run set satisfies the per-class length caps.
 func (s *anchorSpace) capsHold(runs []anchorRun) bool {
 	total := 0
 	for _, r := range runs {
@@ -112,6 +120,7 @@ func (s *anchorSpace) capsHold(runs []anchorRun) bool {
 	}
 }
 
+// each visits every state of up to maxRuns runs that passes capsHold (cap-violating sets are skipped but still extended), in increasing start order, with its total energy, by exhaustive recursion that shares no code with the engine's scan.
 func (s *anchorSpace) each(visit func(runs []anchorRun, E float64)) {
 	var extend func(runs []anchorRun, sum float64, total int)
 	extend = func(runs []anchorRun, sum float64, total int) {
@@ -140,6 +149,7 @@ func (s *anchorSpace) each(visit func(runs []anchorRun, E float64)) {
 	extend(make([]anchorRun, 0, s.maxRuns), 0, 0)
 }
 
+// naiveMultiRun enumerates every multi-run state by brute force; it is the independent oracle, deliberately sharing no enumeration code with the engine, and brackets ZB by the states within anchorBracket of the theta edge.
 func naiveMultiRun(m *Model, maxRuns int, theta float64) naiveMultiResult {
 	space := newAnchorSpace(m, maxRuns)
 	ground := m.GroundEnergy()
@@ -191,6 +201,7 @@ type anchorSize struct {
 	runs, seqLen, maxLen int
 }
 
+// anchorModel builds a model for an anchor case from its leg and size.
 func anchorModel(t *testing.T, seq []byte, leg anchorLeg, size anchorSize, theta float64) *Model {
 	t.Helper()
 	p := DefaultParams()
@@ -208,6 +219,7 @@ func anchorModel(t *testing.T, seq []byte, leg anchorLeg, size anchorSize, theta
 	return m
 }
 
+// assertAnchorAgreement asserts the engine agrees with the oracle: per-class counts compare exactly only at theta >= 1e9, MinE/ZB/ZG/AvgRuns always go through anchorClose (exact or within 1e-12 relative), and the bracket branch is selected by DefinitelyIn == PossiblyIn rather than by theta.
 func assertAnchorAgreement(t *testing.T, m *Model, theta float64) naiveMultiResult {
 	t.Helper()
 	want := naiveMultiRun(m, m.MaxRuns, theta)
@@ -257,6 +269,7 @@ func assertAnchorAgreement(t *testing.T, m *Model, theta float64) naiveMultiResu
 	return want
 }
 
+// logAnchor logs the oracle's state counts and brackets for a case.
 func logAnchor(t *testing.T, want naiveMultiResult, elapsed time.Duration) {
 	t.Helper()
 	nontrivial := 0
@@ -268,6 +281,7 @@ func logAnchor(t *testing.T, want naiveMultiResult, elapsed time.Duration) {
 	t.Logf("elapsed %v counts %v definitely %v possibly %v nontrivial-brackets %d", elapsed.Round(time.Millisecond), want.Counts[1:], want.DefinitelyIn[1:], want.PossiblyIn[1:], nontrivial)
 }
 
+// partialMultiRun reports whether a finite-theta case retained any multi-run state, so partial-retention coverage is not vacuous.
 func partialMultiRun(want naiveMultiResult, theta float64) bool {
 	if theta >= 1e9 {
 		return false
@@ -280,6 +294,7 @@ func partialMultiRun(want naiveMultiResult, theta float64) bool {
 	return false
 }
 
+// TestNaiveMultiRunAgreement pins the engine to the oracle across all geometries, energetics, run classes and theta values.
 func TestNaiveMultiRunAgreement(t *testing.T) {
 	partial := 0
 	clampSizes := []anchorSize{{2, 90, 12}, {3, 36, 5}, {4, 10, 2}}
@@ -311,6 +326,7 @@ func TestNaiveMultiRunAgreement(t *testing.T) {
 	}
 }
 
+// TestNaiveShortCircular pins the engine to the oracle on short circular homopolymers where runs wrap and crowd the origin.
 func TestNaiveShortCircular(t *testing.T) {
 	partial := 0
 	leg := anchorLeg{name: "circular", geom: GeomCircular, sigma: -0.06}
@@ -333,6 +349,7 @@ func TestNaiveShortCircular(t *testing.T) {
 	}
 }
 
+// TestNaiveTiedWindowEdge pins behavior when a state's energy ties the theta window edge, requiring a non-trivial bracket.
 func TestNaiveTiedWindowEdge(t *testing.T) {
 	leg := anchorLeg{name: "circular", geom: GeomCircular, sigma: -0.06}
 	size := anchorSize{2, 60, 20}
@@ -347,6 +364,7 @@ func TestNaiveTiedWindowEdge(t *testing.T) {
 	logAnchor(t, want, 0)
 }
 
+// TestNaiveMultiRunProfile pins the multi-run P, G and MeltedBases to the oracle and requires every run class to contribute.
 func TestNaiveMultiRunProfile(t *testing.T) {
 	clampSizes := []anchorSize{{3, 36, 5}, {4, 10, 2}}
 	openSizes := []anchorSize{{3, 50, 6}, {4, 30, 4}}
@@ -372,6 +390,7 @@ func TestNaiveMultiRunProfile(t *testing.T) {
 	}
 }
 
+// assertProfileAnchor recomputes the profile from the oracle's states with compensated sums and asserts the engine matches, returning the retained count of the case's top run class.
 func assertProfileAnchor(t *testing.T, leg anchorLeg, size anchorSize, theta float64) int {
 	t.Helper()
 	m := anchorModel(t, randomSeq(size.seqLen, 20260411), leg, size, theta)

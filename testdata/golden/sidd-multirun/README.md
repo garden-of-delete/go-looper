@@ -22,11 +22,13 @@ the dedup and probe patches (PROBE).
 
 ## Oracle
 
-Stock SIST double-counts equal-length run pairs in the 2R/3R/4R searches
-(`n1 == n2` restarts the inner iterator at `begin()` plus one instead of
-after the outer iterator). `scripts/sist-dedup-fix.patch` (`patch -p1` inside
-a scratch copy of `src/trans_three`) fixes this; the goldens are the output of the
-fixed build, with `^Run time` lines removed.
+In SIST's 2R/3R/4R searches a pair of equal-length runs is visited under both
+orderings (`n1 == n2` restarts the inner iterator at `begin()` plus one rather
+than after the outer iterator), so such a pair enters the sums twice.
+`scripts/sist-dedup-fix.patch` (`patch -p1` inside a scratch copy of
+`src/trans_three`) starts the inner iterator after the outer one, matching the
+convention golooper-sidd uses, so that the two programs enumerate the same
+states. The goldens are the output of that build, with `^Run time` lines removed.
 
 Before patching, the stock binary is run as `./qsidd -b -p -r -f pbr322.toy.fa`
 and must match `tests/regression/reference/v1.0.0/melting.txt` (ignoring

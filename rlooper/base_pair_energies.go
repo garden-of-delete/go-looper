@@ -22,6 +22,7 @@ type BasePairEnergies struct {
 	override_energy      float64
 }
 
+// NewBpEnergiesReasonableDefaults returns the rlooper2 default RNA:DNA dinucleotide step energies in kcal/mol.
 func NewBpEnergiesReasonableDefaults() BasePairEnergies {
 
 	return BasePairEnergies{
