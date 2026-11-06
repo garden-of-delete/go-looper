@@ -1,0 +1,9 @@
+c00faa1c941a3223e1012a76cb2ae8b4082aac0cd0e700aeb6ea09ed9bc9e109  scripts/sist-1r.patch
+f43fb48fe23540fb44d9420d04e35fca2535ee96df1a60f727eb3634f85060cf  testdata/golden/sidd/circular-copoly-defaults/stdout.txt
+2d87e50fa3ea133e797b2b110ed79413cbc861840aae8c2d0e59e57b5a5f411c  testdata/golden/sidd/circular-nn-alt/stdout.txt
+71516292464285a87ca28347caceee35413f15164406dd56684d8b7fb6330717  testdata/golden/sidd/circular-nn-defaults/stdout.txt
+f380952831ed76b20a9bf50a2df3cd34324d7ec59e82b5fce984dc562ab05abd  testdata/golden/sidd/circular-nn-synth/stdout.txt
+902f4a5ee01889342e3085fa3de599d961a5b6d7f70dbdbdc14fed4be23d8c69  testdata/golden/sidd/clamp-copoly-alt/stdout.txt
+4f5ea3052bac3b31e51bf1a5ae9b245ab3d826a5503ba205bb01b9dbf61619a9  testdata/golden/sidd/clamp-copoly-defaults/stdout.txt
+555b50a14957b26c857d8733efccbb9a5be8339f02dc1aed3fd17ee2777f4731  testdata/golden/sidd/clamp-copoly-synth/stdout.txt
+1c175261a6ae330903c1f75f46b9ec36c3e810233bae4ea5e99c0dd670defa02  testdata/golden/sidd/clamp-nn-defaults/stdout.txt

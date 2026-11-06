@@ -1,0 +1,11 @@
+60469202e200bfa7cbabc63e49cb1f6be4a0b35ae9cec74bedf13c56649d8091  scripts/sist-dedup-fix.patch
+d41d90453657301e68f8297751a7debe44d16e9daae362f8d9641f9a2508b6f7  scripts/sist-probe.patch
+7595485487dea5952fcf2841c256feeca3b4333cfbac50fdfc165ab8f561bfe7  testdata/golden/sidd-multirun/mr-circular-copoly-defaults/stdout.txt
+b5e1ea097c1eb7463b3359fedb55ec9b4700ce46fb0f4ee61bc54b0d80649423  testdata/golden/sidd-multirun/mr-circular-nn-defaults/stdout.txt
+2cf46ecaf8d3410354f6d96fcd48e4d684b6ac613e403f5f1142aa1b710dcc8d  testdata/golden/sidd-multirun/mr-circular-nn-synth/stdout.txt
+6b2f29c8a98334535d22b7739efd80ff56460edf2680d362ba5bcceb7e4cc300  testdata/golden/sidd-multirun/mr-clamp-copoly-alt/stdout.txt
+d2d737262ec168bedc1f4f207a4f355c7f85b44ebebc766e109050237113a6c2  testdata/golden/sidd-multirun/mr-clamp-copoly-defaults/stdout.txt
+8bbeba03d85d7fa569c59cdf1289504173c27f21e758dcf7ef7293db15c15a59  testdata/golden/sidd-multirun/mr-clamp-copoly-hot/stdout.txt
+8d381ad0263f90fed0851b9aa333358aaaf3f073cfa68dcf014ac665dbda73ee  testdata/golden/sidd-multirun/mr-clamp-copoly-synth/stdout.txt
+b4e480207c661a068c4ee716c17132ea7e618e85251c57831b1ceb271ee192fc  testdata/golden/sidd-multirun/mr-clamp-nn-defaults/stdout.txt
+d499e40de4c7db17a98abd928743c96ce07ca4868477d7893c2cabf5d7591b56  testdata/golden/sidd-multirun/mr-origin-straddle/stdout.txt

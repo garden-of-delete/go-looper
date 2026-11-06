@@ -7,13 +7,18 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"golooper/internal/goldencmp"
 )
 
 const (
 	fixturesDir = "../../testdata/fixtures"
 	goldenDir   = "../../testdata/golden/sidd"
+
+	multiRunGoldenDir = "../../testdata/golden/sidd-multirun"
 )
 
+// chdir changes into dir for the duration of the test and restores the previous directory on cleanup.
 func chdir(t *testing.T, dir string) {
 	t.Helper()
 	prev, err := os.Getwd()
@@ -30,6 +35,7 @@ func chdir(t *testing.T, dir string) {
 	})
 }
 
+// runIn executes a fresh root command with args from within dir and returns its stdout and error.
 func runIn(t *testing.T, dir string, args ...string) (string, error) {
 	t.Helper()
 	chdir(t, dir)
@@ -42,6 +48,7 @@ func runIn(t *testing.T, dir string, args ...string) (string, error) {
 	return out.String(), err
 }
 
+// stageContent writes content to name in a new temp directory and returns that directory.
 func stageContent(t *testing.T, name string, content []byte) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -51,6 +58,7 @@ func stageContent(t *testing.T, name string, content []byte) string {
 	return dir
 }
 
+// stageFixture copies a testdata fixture into a new temp directory and returns that directory.
 func stageFixture(t *testing.T, name string) string {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(fixturesDir, name))
@@ -60,6 +68,7 @@ func stageFixture(t *testing.T, name string) string {
 	return stageContent(t, name, data)
 }
 
+// TestFlagValidation pins the error for each invalid flag or input combination and that blank-line-led, comment-led and lowercase FASTA are accepted.
 func TestFlagValidation(t *testing.T) {
 	short := ">s\nACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT\n"
 	tests := []struct {
@@ -95,7 +104,8 @@ func TestFlagValidation(t *testing.T) {
 	}
 }
 
-func TestEndToEndParityMatrix(t *testing.T) {
+// TestEndToEndByteMatrix pins 8 single-run (--max-runs 1) cases byte-exact against the oracle goldens, preserving v0.4 parity.
+func TestEndToEndByteMatrix(t *testing.T) {
 	cases := []struct {
 		name, fixture string
 		flags         []string
@@ -116,7 +126,7 @@ func TestEndToEndParityMatrix(t *testing.T) {
 				t.Fatal(err)
 			}
 			dir := stageFixture(t, tc.fixture)
-			got, err := runIn(t, dir, append([]string{"-f", tc.fixture}, tc.flags...)...)
+			got, err := runIn(t, dir, append([]string{"-f", tc.fixture, "--max-runs", "1"}, tc.flags...)...)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -127,6 +137,64 @@ func TestEndToEndParityMatrix(t *testing.T) {
 	}
 }
 
+// TestEndToEndMultiRunMatrix pins 9 multi-run cases against the oracle goldens through goldencmp (labels and integers exact, floats at 1e-6 relative).
+func TestEndToEndMultiRunMatrix(t *testing.T) {
+	cases := []struct {
+		name, fixture string
+		flags         []string
+	}{
+		{"mr-clamp-copoly-defaults", "pbr322.toy.fa", []string{"--clamp"}},
+		{"mr-clamp-nn-defaults", "pbr322.toy.fa", []string{"--clamp", "--nearest-neighbor"}},
+		{"mr-circular-copoly-defaults", "pbr322.toy.fa", []string{"--circular"}},
+		{"mr-circular-nn-synth", "sidd_synth1600.fa", []string{"--circular", "--nearest-neighbor"}},
+		{"mr-clamp-copoly-alt", "pbr322.toy.fa", []string{"--clamp", "--temperature", "315", "--salt", "0.1", "--sigma", "-0.04", "--threshold", "10"}},
+		{"mr-clamp-copoly-hot", "pbr322.toy.fa", []string{"--clamp", "--temperature", "320", "--threshold", "15", "--sigma", "-0.04"}},
+		{"mr-circular-nn-defaults", "pbr322.toy.fa", []string{"--circular", "--nearest-neighbor"}},
+		{"mr-clamp-copoly-synth", "sidd_synth1600.fa", []string{"--clamp"}},
+		{"mr-origin-straddle", "pbr322_rot310.toy.fa", []string{"--circular"}},
+	}
+	tol := goldencmp.Tolerances{FloatRel: 1e-6, MinMagnitude: 1e-12}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			want, err := os.ReadFile(filepath.Join(multiRunGoldenDir, tc.name, "stdout.txt"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			dir := stageFixture(t, tc.fixture)
+			got, err := runIn(t, dir, append([]string{"-f", tc.fixture}, tc.flags...)...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, m := range goldencmp.Compare(want, []byte(got), tol) {
+				t.Error(m)
+			}
+		})
+	}
+}
+
+// TestMaxRunsFlag pins that --max-runs rejects values outside 1-4 and non-integers, naming the flag, and accepts 1 and 4.
+func TestMaxRunsFlag(t *testing.T) {
+	short := ">s\nACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT\n"
+	for _, v := range []string{"0", "5", "-1", "x", "2.5"} {
+		t.Run("rejects "+v, func(t *testing.T) {
+			dir := stageContent(t, "in.fa", []byte(short))
+			_, err := runIn(t, dir, "-f", "in.fa", "--clamp", "--max-runs", v)
+			if err == nil || !strings.Contains(err.Error(), "--max-runs") || !strings.Contains(err.Error(), "1-4") {
+				t.Fatalf("error = %v, want naming --max-runs and 1-4", err)
+			}
+		})
+	}
+	for _, v := range []string{"1", "4"} {
+		t.Run("accepts "+v, func(t *testing.T) {
+			dir := stageContent(t, "in.fa", []byte(short))
+			if _, err := runIn(t, dir, "-f", "in.fa", "--clamp", "--maxlength", "20", "--max-runs", v); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// firstDiff describes the first differing line between want and got for failure messages.
 func firstDiff(want, got string) string {
 	w, g := strings.Split(want, "\n"), strings.Split(got, "\n")
 	for i := 0; i < len(w) || i < len(g); i++ {
@@ -144,7 +212,18 @@ func firstDiff(want, got string) string {
 	return "no differing line"
 }
 
+// TestTracks runs the track-file checks in single-run and multi-run modes.
 func TestTracks(t *testing.T) {
+	for _, mode := range []struct {
+		name string
+		args []string
+	}{{"single-run", []string{"--max-runs", "1"}}, {"multi-run", nil}} {
+		t.Run(mode.name, func(t *testing.T) { testTracks(t, mode.args) })
+	}
+}
+
+// testTracks pins that the wig tracks match the report's P(x) and G(x) columns and carry the right browser and fixedStep lines for fixture, headerless, name-only and range= inputs.
+func testTracks(t *testing.T, extra []string) {
 	raw, err := os.ReadFile(filepath.Join(fixturesDir, "pbr322.toy.fa"))
 	if err != nil {
 		t.Fatal(err)
@@ -164,7 +243,7 @@ func TestTracks(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := stageContent(t, tt.file, []byte(tt.content))
-			report, err := runIn(t, dir, "-f", tt.file, "--clamp", "--tracks", "trk")
+			report, err := runIn(t, dir, append([]string{"-f", tt.file, "--clamp", "--tracks", "trk"}, extra...)...)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -210,6 +289,7 @@ func TestTracks(t *testing.T) {
 	}
 }
 
+// TestOutfile pins that -o writes a report identical to the stdout report and leaves stdout empty.
 func TestOutfile(t *testing.T) {
 	dir := stageFixture(t, "pbr322.toy.fa")
 	want, err := runIn(t, dir, "-f", "pbr322.toy.fa", "--clamp")
@@ -232,12 +312,13 @@ func TestOutfile(t *testing.T) {
 	}
 }
 
+// TestVersion pins the --version output.
 func TestVersion(t *testing.T) {
 	out, err := runIn(t, t.TempDir(), "--version")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out != "golooper-sidd v0.4.0\n" {
+	if out != "golooper-sidd v0.5.0\n" {
 		t.Fatalf("version output = %q", out)
 	}
 }

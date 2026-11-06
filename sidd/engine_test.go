@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// randomSeq returns n pseudo-random bases from a fixed seed so tests are reproducible.
 func randomSeq(n int, seed int64) []byte {
 	r := rand.New(rand.NewSource(seed))
 	seq := make([]byte, n)
@@ -15,13 +16,16 @@ func randomSeq(n int, seed int64) []byte {
 	return seq
 }
 
+// uniformSeq returns n copies of base.
 func uniformSeq(base byte, n int) []byte {
 	return []byte(strings.Repeat(string(base), n))
 }
 
+// newTestModel builds a MaxRuns-1 model from default parameters after applying mutate, failing the test on error.
 func newTestModel(t *testing.T, seq []byte, mutate func(*Params)) *Model {
 	t.Helper()
 	p := DefaultParams()
+	p.MaxRuns = 1
 	if mutate != nil {
 		mutate(&p)
 	}
@@ -32,6 +36,7 @@ func newTestModel(t *testing.T, seq []byte, mutate func(*Params)) *Model {
 	return m
 }
 
+// TestNaiveAgreement pins the single-run engine to the naive oracle (states, ZB, ZG, MinE within 1e-12) across all geometries with full retention.
 func TestNaiveAgreement(t *testing.T) {
 	seq := randomSeq(300, 1)
 	cases := []struct {
@@ -71,6 +76,7 @@ func TestNaiveAgreement(t *testing.T) {
 	}
 }
 
+// TestThetaRetention pins forEachRetained to exactly the windows with energy below minE+Threshold.
 func TestThetaRetention(t *testing.T) {
 	m := newTestModel(t, uniformSeq('A', 60), func(p *Params) {
 		p.Geometry = GeomCircular
@@ -106,6 +112,7 @@ func TestThetaRetention(t *testing.T) {
 	}
 }
 
+// TestScanOrderTies pins that tied candidate energies keep ascending start order, matching SIST's scan order.
 func TestScanOrderTies(t *testing.T) {
 	m := newTestModel(t, uniformSeq('A', 60), func(p *Params) {
 		p.Geometry = GeomCircular
@@ -133,6 +140,7 @@ func TestScanOrderTies(t *testing.T) {
 	})
 }
 
+// TestLinearNeverWraps pins that linear geometry generates no window that runs past the sequence end.
 func TestLinearNeverWraps(t *testing.T) {
 	m := newTestModel(t, randomSeq(40, 2), func(p *Params) {
 		p.Geometry = GeomLinear
@@ -151,6 +159,7 @@ func TestLinearNeverWraps(t *testing.T) {
 	}
 }
 
+// TestOverflowGuard pins the above-melting-point overflow error.
 func TestOverflowGuard(t *testing.T) {
 	m := newTestModel(t, uniformSeq('A', 2000), func(p *Params) {
 		p.Geometry = GeomClamp
@@ -162,6 +171,7 @@ func TestOverflowGuard(t *testing.T) {
 	}
 }
 
+// TestUnderflowGuard pins the underflow error when every Boltzmann weight underflows.
 func TestUnderflowGuard(t *testing.T) {
 	m := newTestModel(t, uniformSeq('G', 20000), func(p *Params) {
 		p.Geometry = GeomCircular
@@ -173,6 +183,7 @@ func TestUnderflowGuard(t *testing.T) {
 	}
 }
 
+// TestPartialUnderflowGuard pins the underflow error when the best weight is only subnormal rather than flushed to zero, so the near-minimum weights are the only ones with value left, at reduced precision.
 func TestPartialUnderflowGuard(t *testing.T) {
 	m := newTestModel(t, randomSeq(10000, 3), func(p *Params) {
 		p.Geometry = GeomClamp
@@ -184,6 +195,7 @@ func TestPartialUnderflowGuard(t *testing.T) {
 	}
 }
 
+// TestSigmaZero pins that sigma 0 yields MinE 0 and a transition probability strictly between 0 and 1.
 func TestSigmaZero(t *testing.T) {
 	m := newTestModel(t, uniformSeq('A', 600), func(p *Params) {
 		p.Geometry = GeomLinear

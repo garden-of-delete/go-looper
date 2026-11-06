@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 )
 
+// createFileWithDir creates path, first creating any missing parent directories.
 func createFileWithDir(path string) (*os.File, error) {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -22,10 +23,12 @@ type bufferedFile struct {
 	f *os.File
 }
 
+// newBufferedFile wraps f in a buffered writer that Close flushes before closing f.
 func newBufferedFile(f *os.File) *bufferedFile {
 	return &bufferedFile{Writer: bufio.NewWriter(f), f: f}
 }
 
+// Close flushes and closes the buffered file, closing the file even when the flush fails.
 func (b *bufferedFile) Close() error {
 	if err := b.Flush(); err != nil {
 		b.f.Close()
@@ -37,6 +40,7 @@ func (b *bufferedFile) Close() error {
 	return nil
 }
 
+// createOutputFile creates path, writes its header via headerFunc and returns the buffered file, closing it on header failure; headerName only labels errors.
 func createOutputFile(path string, headerFunc func(io.Writer) error, headerName string) (*bufferedFile, error) {
 	file, err := createFileWithDir(path)
 	if err != nil {
@@ -59,6 +63,7 @@ type FileOps struct {
 	ExtendedBasePairProbWig *bufferedFile
 }
 
+// writeWigfileHeader writes the UCSC wiggle track line for trackname; text is pinned by the header tests.
 func writeWigfileHeader(w io.Writer, trackname string) error {
 	header := fmt.Sprintf("track type=wiggle_0 name=\"%s\" visibility=full autoscale=off color=50,150,255 priority=10\n", trackname)
 	if _, err := io.WriteString(w, header); err != nil {
@@ -67,6 +72,7 @@ func writeWigfileHeader(w io.Writer, trackname string) error {
 	return nil
 }
 
+// writeBedfileHeader writes the BED track line for trackname with useScore=1.
 func writeBedfileHeader(w io.Writer, trackname string) error {
 	header := fmt.Sprintf("track name=rLooper description=\"%s\" useScore=1\n", trackname)
 	if _, err := io.WriteString(w, header); err != nil {
@@ -75,6 +81,7 @@ func writeBedfileHeader(w io.Writer, trackname string) error {
 	return nil
 }
 
+// Close closes every non-nil output file and returns one error aggregating all failures.
 func (f *FileOps) Close() error {
 	var errs []error
 
@@ -115,6 +122,7 @@ func (f *FileOps) Close() error {
 	return nil
 }
 
+// CreateOutputFiles creates all six output files next to cfg.OutfileName with their track headers, whether or not the run will fill them, closing any already open on failure.
 func CreateOutputFiles(config *config.Config) (*FileOps, error) {
 	fileOps := &FileOps{}
 	basePath := filepath.Join(filepath.Dir(config.OutfileName), filepath.Base(config.OutfileName))

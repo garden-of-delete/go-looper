@@ -7,6 +7,7 @@ import (
 	"testing"
 )
 
+// TestCircularEnsembleMatchesIndependentEnumeration pins circular count, LogZ, structure energies and residuals against a naive modular enumeration that shares no enumeration code with the engine.
 func TestCircularEnsembleMatchesIndependentEnumeration(t *testing.T) {
 	seq := []byte("ACGTAC")
 	n := len(seq)
@@ -89,6 +90,7 @@ func TestCircularEnsembleMatchesIndependentEnumeration(t *testing.T) {
 	}
 }
 
+// TestCircularLinearSubsetBitParity pins that every non-wrapping circular window has bit-identical energy to its linear counterpart.
 func TestCircularLinearSubsetBitParity(t *testing.T) {
 	m := NewDefaultModel()
 	g := loadOrientedFixture(t)
@@ -115,6 +117,7 @@ func TestCircularLinearSubsetBitParity(t *testing.T) {
 	}
 }
 
+// TestCircularAnalyticHomopolymerZ pins circular LogZ against the closed-form homopolymer sum of n equal windows per length.
 func TestCircularAnalyticHomopolymerZ(t *testing.T) {
 	m := NewDefaultModel()
 	m.Homopolymer, m.OverrideEnergy = true, 0.5
@@ -133,6 +136,7 @@ func TestCircularAnalyticHomopolymerZ(t *testing.T) {
 	}
 }
 
+// TestCircularNoWindows pins that circular sequences with no admissible window length have zero structures and ground-state probability 1.
 func TestCircularNoWindows(t *testing.T) {
 	m := NewDefaultModel()
 	ens := ComputeEnsemble([]byte("AC"), m, Windows{MinLength: 2, Workers: 1, Circular: true})
@@ -145,6 +149,7 @@ func TestCircularNoWindows(t *testing.T) {
 	}
 }
 
+// TestCircularTopStructuresMatchesAllStructures pins TopStructures against AllStructures on a circle, including at least one wrapped record.
 func TestCircularTopStructuresMatchesAllStructures(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("ACGTAC")
@@ -170,6 +175,7 @@ func TestCircularTopStructuresMatchesAllStructures(t *testing.T) {
 	}
 }
 
+// TestCircularSignalsMatchIndependentEnumeration pins circular BPProb and AvgG against a naive modular enumeration that shares no enumeration code with the engine.
 func TestCircularSignalsMatchIndependentEnumeration(t *testing.T) {
 	seq := []byte("ACGTACGT")
 	n := len(seq)
@@ -212,6 +218,7 @@ func TestCircularSignalsMatchIndependentEnumeration(t *testing.T) {
 	}
 }
 
+// TestCircularRotationInvariance pins that rotating a circular sequence leaves Z unchanged and rotates the MFE and all signal tracks accordingly.
 func TestCircularRotationInvariance(t *testing.T) {
 	m := NewDefaultModel()
 	g := loadOrientedFixture(t)
@@ -250,6 +257,7 @@ func TestCircularRotationInvariance(t *testing.T) {
 	}
 }
 
+// TestCircularSignalsHomopolymerUniform pins that a homopolymer circle has uniform BPProb at every base.
 func TestCircularSignalsHomopolymerUniform(t *testing.T) {
 	m := NewDefaultModel()
 	m.Homopolymer, m.OverrideEnergy = true, 0.5
@@ -264,6 +272,7 @@ func TestCircularSignalsHomopolymerUniform(t *testing.T) {
 	}
 }
 
+// TestCircularSignalsWrappedMFE pins that an MFE track for an origin-crossing MFE marks exactly its covered bases modulo n.
 func TestCircularSignalsWrappedMFE(t *testing.T) {
 	m := NewDefaultModel()
 	g := loadOrientedFixture(t)

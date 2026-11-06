@@ -8,6 +8,7 @@ type cell struct {
 
 type cellMatrix [][]cell
 
+// newCellMatrix allocates the per-length, per-start accumulator grid for the single-run profile.
 func newCellMatrix(m *Model) cellMatrix {
 	cells := make(cellMatrix, m.MaxLen+1)
 	for n := m.MinLen; n <= m.MaxLen; n++ {
@@ -16,6 +17,7 @@ func newCellMatrix(m *Model) cellMatrix {
 	return cells
 }
 
+// add credits a state's weighted energy and weight to its cell using plain summation.
 func (c cellMatrix) add(s, n int, E, w float64) {
 	c[n][s].sumG = c[n][s].sumG + float64(E*w)
 	c[n][s].sumB = c[n][s].sumB + w
@@ -25,6 +27,7 @@ type profile struct {
 	sumG, sumB []float64
 }
 
+// accumulate spreads each cell's sums across the bases its window covers, wrapping modulo EngLen.
 func (c cellMatrix) accumulate(m *Model) profile {
 	p := profile{sumG: make([]float64, m.EngLen), sumB: make([]float64, m.EngLen)}
 	for n := m.MinLen; n <= m.MaxLen; n++ {
@@ -42,6 +45,7 @@ func (c cellMatrix) accumulate(m *Model) profile {
 	return p
 }
 
+// finish converts the per-base sums into P and G on res, filling uncovered bases with the maximum G and shifting G so its maximum is GMaxAdj.
 func (p profile) finish(m *Model, zb, zg float64, res *Result) {
 	aveG := zg / zb
 	px := make([]float64, m.EngLen)

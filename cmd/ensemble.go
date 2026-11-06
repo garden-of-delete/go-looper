@@ -23,6 +23,7 @@ dump, top-structure and residual reports.`,
 	},
 }
 
+// init registers the ensemble subcommand on the root command.
 func init() {
 	rootCmd.AddCommand(ensembleCmd)
 }

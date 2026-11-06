@@ -10,6 +10,7 @@ import (
 	"testing"
 )
 
+// loadOrientedFixture loads the synthetic200 fixture gene and applies default orientation.
 func loadOrientedFixture(t *testing.T) *Gene {
 	t.Helper()
 	genes := readFixture(t, "../testdata/fixtures/synthetic200.fa")
@@ -18,6 +19,7 @@ func loadOrientedFixture(t *testing.T) *Gene {
 	return g
 }
 
+// readWigValues parses the data lines of a wiggle file, skipping track, browser, comment and fixedStep header lines.
 func readWigValues(t *testing.T, path string) []float64 {
 	t.Helper()
 	f, err := os.Open(path)
@@ -45,6 +47,7 @@ func readWigValues(t *testing.T, path string) []float64 {
 	return values
 }
 
+// compareWig asserts that got matches the wiggle file at path element-wise within checkTol.
 func compareWig(t *testing.T, got []float64, path string) {
 	t.Helper()
 	want := readWigValues(t, path)
@@ -56,6 +59,7 @@ func compareWig(t *testing.T, got []float64, path string) {
 	}
 }
 
+// compareMFEWig asserts the Go MFE track marks the ensemble MFE and equals the C++ golden span, accepting a different golden window only if its energy matches within the golden tolerance (1e-9 absolute / 1e-5 relative).
 func compareMFEWig(t *testing.T, seq []byte, m *EnergyModel, ens EnsembleResult, got []float64, path string) {
 	t.Helper()
 	gotStart, gotEnd := onesSpan(t, got)
@@ -70,6 +74,7 @@ func compareMFEWig(t *testing.T, seq []byte, m *EnergyModel, ens EnsembleResult,
 	t.Logf("%s: tied MFE, C++ chose window (%d,%d), Go chose (%d,%d)", path, start, end, ens.MFE.Start, ens.MFE.End)
 }
 
+// onesSpan returns the half-open span of the contiguous run of 1s in signal and fails if any other element is nonzero.
 func onesSpan(t *testing.T, signal []float64) (start, end int) {
 	t.Helper()
 	start = slices.Index(signal, 1)
@@ -88,6 +93,7 @@ func onesSpan(t *testing.T, signal []float64) (start, end int) {
 	return start, end
 }
 
+// TestSignalsAgainstGoldenWigDefaults pins BPProb, AvgG and MFE tracks against the C++ golden wigs for default parameters.
 func TestSignalsAgainstGoldenWigDefaults(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
@@ -99,6 +105,7 @@ func TestSignalsAgainstGoldenWigDefaults(t *testing.T) {
 	compareMFEWig(t, g.Sequence, m, ens, sig.MFE, "../testdata/golden/defaults/out_mfe.wig")
 }
 
+// TestSignalsAgainstGoldenWigSigma010 pins BPProb and MFE tracks against the C++ golden wigs at sigma -0.10.
 func TestSignalsAgainstGoldenWigSigma010(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
@@ -110,6 +117,7 @@ func TestSignalsAgainstGoldenWigSigma010(t *testing.T) {
 	compareMFEWig(t, g.Sequence, m, ens, sig.MFE, "../testdata/golden/sigma010/out_mfe.wig")
 }
 
+// TestSignalsAgainstGoldenWigNauto pins BPProb and MFE tracks against the C++ golden wigs at N=200.
 func TestSignalsAgainstGoldenWigNauto(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
@@ -121,6 +129,7 @@ func TestSignalsAgainstGoldenWigNauto(t *testing.T) {
 	compareMFEWig(t, g.Sequence, m, ens, sig.MFE, "../testdata/golden/nauto/out_mfe.wig")
 }
 
+// TestSignalsAgainstGoldenWigHomopolymer05 pins BPProb and MFE tracks against the C++ golden wigs in homopolymer mode with energy 0.5.
 func TestSignalsAgainstGoldenWigHomopolymer05(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
@@ -132,6 +141,7 @@ func TestSignalsAgainstGoldenWigHomopolymer05(t *testing.T) {
 	compareMFEWig(t, g.Sequence, m, ens, sig.MFE, "../testdata/golden/homopolymer05/out_mfe.wig")
 }
 
+// TestSignalsAgainstNaiveDirectSum pins BPProb and AvgG against a brute-force per-window sum on GATTACA, independent of the running-sum implementation.
 func TestSignalsAgainstNaiveDirectSum(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("GATTACA")
@@ -169,6 +179,7 @@ func TestSignalsAgainstNaiveDirectSum(t *testing.T) {
 	}
 }
 
+// loadPfc53Fixture loads and orients the first record of the pfc53 sequence.
 func loadPfc53Fixture(t *testing.T) *Gene {
 	t.Helper()
 	genes := readFixture(t, "../res/pfc53_full.fa")
@@ -177,6 +188,7 @@ func loadPfc53Fixture(t *testing.T) *Gene {
 	return g
 }
 
+// TestSignalsPfc53NoNegativeBPProb pins that BPProb is never negative and the final base has exactly zero BPProb and AvgG.
 func TestSignalsPfc53NoNegativeBPProb(t *testing.T) {
 	g := loadPfc53Fixture(t)
 	m := NewDefaultModel()
@@ -198,6 +210,7 @@ func TestSignalsPfc53NoNegativeBPProb(t *testing.T) {
 	}
 }
 
+// TestSignalsZeroStructures pins that all signals are zero when MinLength admits no windows.
 func TestSignalsZeroStructures(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("ACGT")
@@ -221,6 +234,7 @@ func TestSignalsZeroStructures(t *testing.T) {
 	}
 }
 
+// TestComputeResidualsAgainstGolden pins all five ensemble residuals against the C++ golden stdout.
 func TestComputeResidualsAgainstGolden(t *testing.T) {
 	g := loadOrientedFixture(t)
 	m := NewDefaultModel()
@@ -235,6 +249,7 @@ func TestComputeResidualsAgainstGolden(t *testing.T) {
 	checkTol(t, res.StrandSeparation, want["ensemble_strand_separation_absorption"])
 }
 
+// TestComputeResidualsZeroStructures pins that with no windows the residuals reduce to the ground-state terms and zero wrapping and strand separation.
 func TestComputeResidualsZeroStructures(t *testing.T) {
 	m := NewDefaultModel()
 	seq := []byte("ACGT")
@@ -259,6 +274,7 @@ func TestComputeResidualsZeroStructures(t *testing.T) {
 	}
 }
 
+// parseResidualsGolden extracts the five ensemble residual values from a C++ golden stdout file and fails if any is missing.
 func parseResidualsGolden(t *testing.T, path string) map[string]float64 {
 	t.Helper()
 	f, err := os.Open(path)

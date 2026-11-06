@@ -17,6 +17,7 @@ type signalAccum struct {
 	bp, num []float64
 }
 
+// newSignalAccum returns a zeroed per-worker accumulator; the energy-weighted numerator is allocated only when withAvgG is set.
 func newSignalAccum(n int, withAvgG bool) signalAccum {
 	acc := signalAccum{bp: make([]float64, n)}
 	if withAvgG {
@@ -25,6 +26,7 @@ func newSignalAccum(n int, withAvgG bool) signalAccum {
 	return acc
 }
 
+// addRow adds the probability (and energy-weighted probability) of every window starting at s to bases s..s+mLen-2 (mLen-1 bases; the window's last base is never credited), using a running sum from the longest window down so each base is written once.
 func (a *signalAccum) addRow(m *EnergyModel, p []float64, s, minLength int, rt, logZ float64, circular bool) {
 	n := len(a.bp)
 	var sumProb, sumProbG float64
@@ -46,6 +48,7 @@ func (a *signalAccum) addRow(m *EnergyModel, p []float64, s, minLength int, rt, 
 	}
 }
 
+// merge adds another worker's partial signal sums into a.
 func (a *signalAccum) merge(o signalAccum) {
 	for i := range a.bp {
 		a.bp[i] += o.bp[i]
@@ -55,6 +58,7 @@ func (a *signalAccum) merge(o signalAccum) {
 	}
 }
 
+// ComputeSignals returns the per-base base-pairing probability, average energy and MFE-membership tracks for the ensemble ens.
 func ComputeSignals(seq []byte, m *EnergyModel, w Windows, ens EnsembleResult, withAvgG bool) Signals {
 	n := len(seq)
 	p := prefixBP(seq, m, w.Circular)
@@ -106,6 +110,7 @@ func ComputeSignals(seq []byte, m *EnergyModel, w Windows, ens EnsembleResult, w
 	return sig
 }
 
+// Length returns the number of bases spanned by r in a sequence of length n, accounting for circular wrap when End < Start.
 func (r StructureRecord) Length(n int) int {
 	if r.End < r.Start {
 		return r.End - r.Start + 1 + n
@@ -113,6 +118,7 @@ func (r StructureRecord) Length(n int) int {
 	return r.End - r.Start + 1
 }
 
+// StructureResiduals returns the twist and linking-difference residuals of a single structure spanning mLen bases.
 func StructureResiduals(m *EnergyModel, mLen int) (twist, linkingDifference float64) {
 	l := float64(mLen - 1)
 	fourPiSqC := 4 * math.Pi * math.Pi * m.C
@@ -126,6 +132,7 @@ type residualAccum struct {
 	twist, linkingDifference, wrappingAbsorption, strandSeparation float64
 }
 
+// addRow adds the probability-weighted residual contributions of every window starting at s.
 func (a *residualAccum) addRow(m *EnergyModel, p []float64, s, n, minLength int, rt, logZ float64, circular bool) {
 	for mLen := minLength; mLen <= maxLen(n, s, circular); mLen++ {
 		g := windowEnergy(m, p, s, mLen)
@@ -139,6 +146,7 @@ func (a *residualAccum) addRow(m *EnergyModel, p []float64, s, n, minLength int,
 	}
 }
 
+// merge adds another worker's partial residual sums into a.
 func (a *residualAccum) merge(o residualAccum) {
 	a.twist += o.twist
 	a.linkingDifference += o.linkingDifference
@@ -146,6 +154,7 @@ func (a *residualAccum) merge(o residualAccum) {
 	a.strandSeparation += o.strandSeparation
 }
 
+// ComputeResiduals returns the ensemble-averaged twist, linking difference, superhelicity, wrapping and strand-separation residuals, including the ground-state contribution.
 func ComputeResiduals(seq []byte, m *EnergyModel, w Windows, ens EnsembleResult) Residuals {
 	var res Residuals
 

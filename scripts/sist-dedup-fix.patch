@@ -1,0 +1,111 @@
+--- a/SIDD_2R.cpp
++++ b/SIDD_2R.cpp
+@@ -60,9 +60,14 @@
+ 
+         if (e1 >= 10000)
+           break;
+-        j = Lst_OBE[n2].begin();
+-        if (n1 == n2)
+-          ++j; // no repeat of the same group
++        if (n1 == n2) {
++          j = i;
++          ++j;
++        } else {
++          j = Lst_OBE[n2].begin();
++        }
++        if (j == Lst_OBE[n2].end())
++          break;
+         if (e1 + j->get_energy() + Gres[n1 + n2][1] >= max_E)
+           break;
+         for (; j != Lst_OBE[n2].end(); ++j) {
+--- a/SIDD_3R.cpp
++++ b/SIDD_3R.cpp
+@@ -64,9 +64,14 @@
+           double e1 = i->get_energy();
+           if (e1 >= 10000)
+             break;
+-          j = Lst_OBE[n2].begin();
+-          if (n1 == n2)
+-            ++j; // no repeat of the same group
++          if (n1 == n2) {
++            j = i;
++            ++j;
++          } else {
++            j = Lst_OBE[n2].begin();
++          }
++          if (j == Lst_OBE[n2].end())
++            break;
+           if (e1 + j->get_energy() + Lst_OBE[n3].begin()->get_energy() +
+                   Gres[n1 + n2 + n3][2] >=
+               max_E)
+@@ -76,9 +81,14 @@
+             double e2 = j->get_energy();
+             if (e2 >= 10000)
+               break;
+-            k = Lst_OBE[n3].begin();
+-            if (n2 == n3)
++            if (n2 == n3) {
++              k = j;
+               ++k;
++            } else {
++              k = Lst_OBE[n3].begin();
++            }
++            if (k == Lst_OBE[n3].end())
++              break;
+             if (e1 + e2 + k->get_energy() + Gres[n1 + n2 + n3][2] >= max_E)
+               break;
+             for (; k != Lst_OBE[n3].end(); ++k) {
+--- a/SIDD_4R.cpp
++++ b/SIDD_4R.cpp
+@@ -72,9 +72,14 @@
+             double e1 = i->get_energy();
+             if (e1 >= 10000)
+               break;
+-            j = Lst_OBE[n2].begin();
+-            if (n1 == n2)
+-              ++j; // no repeat of the same group
++            if (n1 == n2) {
++              j = i;
++              ++j;
++            } else {
++              j = Lst_OBE[n2].begin();
++            }
++            if (j == Lst_OBE[n2].end())
++              break;
+             if (e1 + j->get_energy() + Lst_OBE[n3].begin()->get_energy() +
+                     Lst_OBE[n4].begin()->get_energy() +
+                     Gres[n1 + n2 + n3 + n4][3] >=
+@@ -85,9 +90,14 @@
+               double e2 = j->get_energy();
+               if (e2 >= 10000)
+                 break;
+-              k = Lst_OBE[n3].begin();
+-              if (n2 == n3)
++              if (n2 == n3) {
++                k = j;
+                 ++k;
++              } else {
++                k = Lst_OBE[n3].begin();
++              }
++              if (k == Lst_OBE[n3].end())
++                break;
+               if (e1 + e2 + k->get_energy() +
+                       Lst_OBE[n4].begin()->get_energy() +
+                       Gres[n1 + n2 + n3 + n4][3] >=
+@@ -98,9 +108,14 @@
+                 double e3 = k->get_energy();
+                 if (e3 >= 10000)
+                   break;
+-                l = Lst_OBE[n4].begin();
+-                if (n3 == n4)
++                if (n3 == n4) {
++                  l = k;
+                   ++l;
++                } else {
++                  l = Lst_OBE[n4].begin();
++                }
++                if (l == Lst_OBE[n4].end())
++                  break;
+                 if (e1 + e2 + e3 + l->get_energy() +
+                         Gres[n1 + n2 + n3 + n4][3] >=
+                     max_E)

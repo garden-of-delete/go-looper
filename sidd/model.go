@@ -25,6 +25,8 @@ const (
 	linking  = 2220.0
 )
 
+// pi is a var so expressions using it stay runtime products; the var form lets the compiler contract GRes's final multiply-add into an FMA on arm64, matching the FMA-contracted C++ oracle, whereas the untyped constant leaves it unfused.
+// Swapping in math.Pi shifts GRes by 1-2 ulp at many lengths on arm64 and is a no-op on amd64, where Go emits no automatic FMA.
 var pi = math.Pi
 
 type Params struct {
@@ -33,10 +35,12 @@ type Params struct {
 	N                                   float64
 	NearestNeighbor                     bool
 	Geometry                            Geometry
+	MaxRuns                             int
 }
 
+// DefaultParams returns the SIST-default parameters with MaxRuns 4.
 func DefaultParams() Params {
-	return Params{Sigma: -0.06, Temperature: 310, Salt: 0.01, Threshold: 12, MinLen: 1, MaxLen: 250}
+	return Params{Sigma: -0.06, Temperature: 310, Salt: 0.01, Threshold: 12, MinLen: 1, MaxLen: 250, MaxRuns: 4}
 }
 
 type Model struct {
@@ -49,6 +53,7 @@ type Model struct {
 
 var baseCode = [256]int8{'A': 1, 'C': 2, 'G': 3, 'T': 4}
 
+// NewModel validates seq and p, pads clamp geometry with 50 G bases, and precomputes the energy coefficients; it returns an error for any parameter combination the SIDD model rejects.
 func NewModel(seq []byte, p Params) (*Model, error) {
 	switch {
 	case len(seq) == 0:
@@ -69,6 +74,8 @@ func NewModel(seq []byte, p Params) (*Model, error) {
 		return nil, fmt.Errorf("sidd: threshold %v must not be negative", p.Threshold)
 	case p.Sigma > 0:
 		return nil, fmt.Errorf("sidd: positive sigma %v (positive supercoiling) is not supported; SIST's positive-magnitude -s convention corresponds to a negative --sigma here", p.Sigma)
+	case p.MaxRuns < 1 || p.MaxRuns > 4:
+		return nil, fmt.Errorf("sidd: maximum runs %d must be between 1 and 4", p.MaxRuns)
 	}
 	for i, b := range seq {
 		if baseCode[b] == 0 {
@@ -85,7 +92,7 @@ func NewModel(seq []byte, p Params) (*Model, error) {
 		}
 	}
 	if p.Geometry != GeomLinear && p.MaxLen >= m.EngLen {
-		return nil, fmt.Errorf("sidd: maximum length %d must be below the sequence length %d (plus %d clamp bases for clamp geometry)", p.MaxLen, len(seq), m.EngLen-len(seq))
+		return nil, fmt.Errorf("sidd: maximum length %d must be below %d (%d bases plus the %d-base clamp)", p.MaxLen, m.EngLen, len(seq), m.EngLen-len(seq))
 	}
 	if p.Geometry == GeomLinear {
 		m.MaxLen = min(p.MaxLen, m.SeqLen)
@@ -113,6 +120,7 @@ func NewModel(seq []byte, p Params) (*Model, error) {
 	return m, nil
 }
 
+// nearestNeighborEnergies returns the per-base nearest-neighbor free energy over EngLen, wrapping at the ends so circular windows are well defined.
 func (m *Model) nearestNeighborEnergies() []float64 {
 	enthalpy := [4][4]float64{
 		{32.3, 35.8, 36.0, 31.2},
@@ -146,6 +154,7 @@ func (m *Model) nearestNeighborEnergies() []float64 {
 	return perBase
 }
 
+// WindowEnergy returns the base-pairing energy of the n-base window starting at s, wrapping modulo EngLen.
 func (m *Model) WindowEnergy(s, n int) float64 {
 	if m.perBase != nil {
 		sum := 0.0
@@ -166,6 +175,7 @@ func (m *Model) WindowEnergy(s, n int) float64 {
 	return float64(m.BAT*float64(at)) + float64(m.BGC*float64(gc))
 }
 
+// GRes returns the residual twist/supercoiling free energy when n bases are melted in total, mirroring SIST's calc_Gres().
 func (m *Model) GRes(n int) float64 {
 	q := m.Alpha + float64(n)/A
 	t1 := q * q
@@ -173,6 +183,7 @@ func (m *Model) GRes(n int) float64 {
 	return t2 / (4*pi*pi*C + float64(m.K*float64(n)))
 }
 
+// GroundEnergy returns the free energy of the fully unmelted (ground) state, which equals GRes(0).
 func (m *Model) GroundEnergy() float64 {
 	return 0.5 * m.K * m.Alpha * m.Alpha
 }

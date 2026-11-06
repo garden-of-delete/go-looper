@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// naiveProfile recomputes P, G and melted bases directly from the naive window energies; it is the independent oracle for the profile code.
 func naiveProfile(m *Model) (p, g []float64, melted float64) {
 	_, all := naiveEnergies(m)
 	ground := m.GroundEnergy()
@@ -40,6 +41,7 @@ func naiveProfile(m *Model) (p, g []float64, melted float64) {
 	return p, g[:m.SeqLen], melted
 }
 
+// minMax returns the smallest and largest element of v.
 func minMax(v []float64) (lo, hi float64) {
 	lo, hi = v[0], v[0]
 	for _, x := range v {
@@ -48,6 +50,7 @@ func minMax(v []float64) (lo, hi float64) {
 	return lo, hi
 }
 
+// TestNaiveProfile pins the single-run P, G and MeltedBases to the naive oracle across geometries.
 func TestNaiveProfile(t *testing.T) {
 	seq := randomSeq(300, 1)
 	cases := []struct {
@@ -87,6 +90,7 @@ func TestNaiveProfile(t *testing.T) {
 	}
 }
 
+// TestRotationInvariance pins that rotating a circular sequence rotates P by the same amount.
 func TestRotationInvariance(t *testing.T) {
 	const shift = 37
 	seq := randomSeq(240, 3)
@@ -109,6 +113,7 @@ func TestRotationInvariance(t *testing.T) {
 	}
 }
 
+// TestHomopolymerUniform pins a flat P and a maximum G of GMaxAdj on a circular homopolymer.
 func TestHomopolymerUniform(t *testing.T) {
 	m := newTestModel(t, uniformSeq('A', 300), func(p *Params) { p.Geometry = GeomCircular })
 	res, err := Run(m)
@@ -125,6 +130,7 @@ func TestHomopolymerUniform(t *testing.T) {
 	}
 }
 
+// TestClampDropsPads pins that clamp output covers only the real sequence while the pad bases still affect ZB.
 func TestClampDropsPads(t *testing.T) {
 	seq := randomSeq(300, 4)
 	run := func(g Geometry) *Result {
@@ -143,6 +149,7 @@ func TestClampDropsPads(t *testing.T) {
 	}
 }
 
+// TestUncoveredFill pins that bases no retained state covers get the maximum G.
 func TestUncoveredFill(t *testing.T) {
 	seq := append(append(uniformSeq('G', 100), uniformSeq('A', 20)...), uniformSeq('G', 100)...)
 	m := newTestModel(t, seq, func(p *Params) {

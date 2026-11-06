@@ -81,6 +81,7 @@ for running biophysical simulations on nucleic acid energetics with an emphasis 
 	},
 }
 
+// parseSuperhelicityDomain parses --N as the literal "auto" or a positive integer; value is meaningful only when auto is false.
 func parseSuperhelicityDomain(s string) (auto bool, value int, err error) {
 	if s == "auto" {
 		return true, 0, nil
@@ -92,6 +93,7 @@ func parseSuperhelicityDomain(s string) (auto bool, value int, err error) {
 	return false, n, nil
 }
 
+// validateMinLength rejects --minlength values below 2.
 func validateMinLength(n int) error {
 	if n < 2 {
 		return fmt.Errorf("--minlength must be at least 2, got %d", n)
@@ -99,6 +101,7 @@ func validateMinLength(n int) error {
 	return nil
 }
 
+// requireInputOutput errors unless both the input and output file names were supplied.
 func requireInputOutput() error {
 	if cfg.InfileName == "" {
 		return fmt.Errorf("input file is required (use -f/--input)")
@@ -109,14 +112,17 @@ func requireInputOutput() error {
 	return nil
 }
 
+// GetConfig returns a shallow copy of the package-level config populated from the parsed flags.
 func GetConfig() config.Config {
 	return cfg
 }
 
+// Execute runs the root command; PersistentPreRunE copies the optional-valued flags into cfg only when explicitly set, leaving unset fields nil for the model defaults, while infile, outfile and the bool flags are bound to cfg directly.
 func Execute() error {
 	return rootCmd.Execute()
 }
 
+// init wires the flags and registers the show-config subcommand, which prints the effective config without running a simulation.
 func init() {
 	initFlags()
 
@@ -181,6 +187,7 @@ Values not explicitly set via command line flags will use the model's default va
 
 }
 
+// initFlags declares the persistent flags shared by every subcommand, binding the optional-valued ones to package variables that only reach cfg when set.
 func initFlags() {
 	rootCmd.PersistentFlags().Float64VarP(&nucleationFreeEnergy, "a", "a", 0.0, "nucleation free energy in Kcal/mol")
 	rootCmd.PersistentFlags().StringVarP(&superhelicityDomain, "N", "N", "0", "size of the superhelicity domain in nucleotides (use 'auto' for automatic sizing)")

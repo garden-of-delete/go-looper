@@ -12,6 +12,7 @@ import (
 	"golooper/config"
 )
 
+// parsePerloopRows parses sigma and probability columns from a perloop output file.
 func parsePerloopRows(t *testing.T, path string) (sigmas, probs []float64) {
 	t.Helper()
 	f, err := os.Open(path)
@@ -47,6 +48,7 @@ func parsePerloopRows(t *testing.T, path string) (sigmas, probs []float64) {
 	return sigmas, probs
 }
 
+// checkSigma fails unless got is within 1e-6 of want.
 func checkSigma(t *testing.T, got, want float64) {
 	t.Helper()
 	if diff := got - want; diff < -1e-6 || diff > 1e-6 {
@@ -54,6 +56,7 @@ func checkSigma(t *testing.T, got, want float64) {
 	}
 }
 
+// TestSigmaGrid pins the inclusive endpoint and the slack that drops a hi not on the step grid.
 func TestSigmaGrid(t *testing.T) {
 	grid := sigmaGrid(-0.10, -0.02, 0.01)
 	if len(grid) != 9 {
@@ -68,6 +71,7 @@ func TestSigmaGrid(t *testing.T) {
 	checkSigma(t, grid[len(grid)-1], -0.03)
 }
 
+// TestPerloopHonorsAutoN pins that auto domain size changes perloop output.
 func TestPerloopHonorsAutoN(t *testing.T) {
 	dir := t.TempDir()
 
@@ -107,6 +111,7 @@ func TestPerloopHonorsAutoN(t *testing.T) {
 	}
 }
 
+// TestPerloopCircularDiffersFromLinear pins that circular mode changes perloop output at fixed N.
 func TestPerloopCircularDiffersFromLinear(t *testing.T) {
 	dir := t.TempDir()
 	pinnedN := 1500
@@ -149,6 +154,7 @@ func TestPerloopCircularDiffersFromLinear(t *testing.T) {
 	}
 }
 
+// TestRunPerloopAgainstGolden checks perloop output against the reference golden file.
 func TestRunPerloopAgainstGolden(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{

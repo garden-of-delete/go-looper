@@ -7,6 +7,7 @@ type naiveResult struct {
 	states       int
 }
 
+// naiveWindows lists every (start, length) single-run window by direct loops, an independent oracle sharing no code with the engine's candidates.
 func naiveWindows(m *Model) [][2]int {
 	var windows [][2]int
 	for n := m.MinLen; n <= m.MaxLen; n++ {
@@ -21,6 +22,7 @@ func naiveWindows(m *Model) [][2]int {
 	return windows
 }
 
+// naiveEnergies returns the minimum energy and every window's energy for the single-run oracle.
 func naiveEnergies(m *Model) (float64, map[[2]int]float64) {
 	minE := m.GroundEnergy()
 	all := map[[2]int]float64{}
@@ -32,6 +34,7 @@ func naiveEnergies(m *Model) (float64, map[[2]int]float64) {
 	return minE, all
 }
 
+// naiveRun computes the single-run partition function and state count by brute force; it is the independent oracle for runSingle.
 func naiveRun(m *Model) naiveResult {
 	minE, all := naiveEnergies(m)
 	limit := minE + m.Threshold

@@ -14,6 +14,7 @@ import (
 const defaultMinRLoopLength = 2
 const defaultSensitivity = 1
 
+// ModelFromConfig returns a default energy model with each non-nil config override applied.
 func ModelFromConfig(cfg *config.Config) *rlooper.EnergyModel {
 	m := rlooper.NewDefaultModel()
 	if cfg.NucleationFreeEnergy != nil {
@@ -35,6 +36,7 @@ func ModelFromConfig(cfg *config.Config) *rlooper.EnergyModel {
 	return m
 }
 
+// minLengthFromConfig returns the configured minimum R-loop length, defaulting to 2.
 func minLengthFromConfig(cfg *config.Config) int {
 	if cfg.MinRLoopLength != nil {
 		return *cfg.MinRLoopLength
@@ -42,6 +44,7 @@ func minLengthFromConfig(cfg *config.Config) int {
 	return defaultMinRLoopLength
 }
 
+// sensitivityFromConfig returns the configured peak sensitivity exponent, defaulting to 1.
 func sensitivityFromConfig(cfg *config.Config) int {
 	if cfg.Sensitivity != nil {
 		return *cfg.Sensitivity
@@ -49,6 +52,7 @@ func sensitivityFromConfig(cfg *config.Config) int {
 	return defaultSensitivity
 }
 
+// topFromConfig returns the number of top structures to print, 0 meaning none.
 func topFromConfig(cfg *config.Config) int {
 	if cfg.Top != nil {
 		return *cfg.Top
@@ -56,10 +60,12 @@ func topFromConfig(cfg *config.Config) int {
 	return 0
 }
 
+// boolPtr reports whether p is non-nil and true, treating an unset flag as false.
 func boolPtr(p *bool) bool {
 	return p != nil && *p
 }
 
+// resolveDomainSize sets the model's superhelicity domain size, an explicit N winning over auto or circular sequence length, and notes on stderr when an explicit N differs from a circular length.
 func resolveDomainSize(cfg *config.Config, m *rlooper.EnergyModel, seqLen int, stderr io.Writer) {
 	if cfg.SuperhelicityDomain != nil {
 		n := *cfg.SuperhelicityDomain
@@ -85,6 +91,7 @@ type ensembleParams struct {
 	threads    int
 }
 
+// paramsFromConfig resolves cfg into ensembleParams, converting sensitivity s into the peak threshold 10^s.
 func paramsFromConfig(cfg *config.Config, threads int) ensembleParams {
 	return ensembleParams{
 		model:      ModelFromConfig(cfg),
@@ -98,6 +105,7 @@ func paramsFromConfig(cfg *config.Config, threads int) ensembleParams {
 	}
 }
 
+// RunEnsembleSim runs the ensemble pipeline on every gene in cfg.InfileName, writing the WIG, BED and dump outputs and reporting on stdout; it errors if the input has no genes.
 func RunEnsembleSim(cfg *config.Config, threads int, stdout io.Writer) (err error) {
 	infile, err := os.Open(cfg.InfileName)
 	if err != nil {
@@ -134,6 +142,7 @@ func RunEnsembleSim(cfg *config.Config, threads int, stdout io.Writer) (err erro
 	return nil
 }
 
+// warnGeneAnomalies warns on stderr about an unknown strand and about a header range length that disagrees with the sequence length.
 func warnGeneAnomalies(stderr io.Writer, g *rlooper.Gene) {
 	if g.Loc.Strand != "+" && g.Loc.Strand != "-" {
 		fmt.Fprintf(stderr, "warning: gene %s has missing/unknown strand %q; orientation is skipped\n", g.Name, g.Loc.Strand)
@@ -143,6 +152,7 @@ func warnGeneAnomalies(stderr io.Writer, g *rlooper.Gene) {
 	}
 }
 
+// processGene computes and writes one gene's ensemble, signals, peaks, residuals, top structures and dump, flipping minus-strand signals into genomic order.
 func processGene(stdout io.Writer, outFiles *FileOps, g *rlooper.Gene, cfg *config.Config, p ensembleParams) error {
 	fmt.Fprintf(stdout, "processing gene: %s...", g.Name)
 
@@ -217,6 +227,7 @@ func processGene(stdout io.Writer, outFiles *FileOps, g *rlooper.Gene, cfg *conf
 	return nil
 }
 
+// dumpGene writes the gene's structure dump to OutfileName+gene name+_dump.txt.
 func dumpGene(stdout io.Writer, cfg *config.Config, g *rlooper.Gene, m *rlooper.EnergyModel, recs []rlooper.StructureRecord) error {
 	f, err := createFileWithDir(cfg.OutfileName + g.Name + "_dump.txt")
 	if err != nil {

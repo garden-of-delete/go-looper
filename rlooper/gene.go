@@ -28,6 +28,7 @@ var (
 	headerStrandRegex = regexp.MustCompile(`(?i)strand=([-+])`)
 )
 
+// ReadGenes parses FASTA records from r, uppercasing bases and skipping spaces and tabs, and returns an error naming the record and position of the first non-ACGT base.
 func ReadGenes(r io.Reader) ([]*Gene, error) {
 	br := bufio.NewReader(r)
 	var genes []*Gene
@@ -68,6 +69,7 @@ func ReadGenes(r io.Reader) ([]*Gene, error) {
 	return genes, nil
 }
 
+// parseHeader builds a Gene from a FASTA header line, taking the name from the first field and optional range=chr:start-end and strand=+/- attributes.
 func parseHeader(line string) *Gene {
 	g := &Gene{Header: line}
 	body := strings.TrimPrefix(line, ">")
@@ -85,6 +87,7 @@ func parseHeader(line string) *Gene {
 	return g
 }
 
+// upperBase uppercases c and reports whether the result is one of A, C, G, T; the returned byte is the uppercased input even when invalid.
 func upperBase(c byte) (byte, bool) {
 	if c >= 'a' && c <= 'z' {
 		c -= 'a' - 'A'
@@ -98,18 +101,21 @@ func upperBase(c byte) (byte, bool) {
 
 var complementBase = map[byte]byte{'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C'}
 
+// Complement replaces each base of the sequence with its Watson-Crick complement in place.
 func (g *Gene) Complement() {
 	for i, b := range g.Sequence {
 		g.Sequence[i] = complementBase[b]
 	}
 }
 
+// Invert reverses the sequence in place without complementing it.
 func (g *Gene) Invert() {
 	for i, j := 0, len(g.Sequence)-1; i < j; i, j = i+1, j-1 {
 		g.Sequence[i], g.Sequence[j] = g.Sequence[j], g.Sequence[i]
 	}
 }
 
+// ApplyOrientation first orients the sequence by Loc.Strand (complement for +, reverse for -), then applies the complement, reverse and invert flags, where invert implies both.
 func (g *Gene) ApplyOrientation(complement, reverse, invert bool) {
 	switch g.Loc.Strand {
 	case "+":

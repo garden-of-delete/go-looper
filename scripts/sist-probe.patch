@@ -1,0 +1,54 @@
+--- a/SIDD_2R.cpp
++++ b/SIDD_2R.cpp
+@@ -36,6 +36,7 @@
+   LstState::iterator i;
+   LstState::iterator j;
+   flag_minE2 = false; // default value
++  fprintf(stderr, "PROBE level=2R start min_E=%.17g max_E=%.17g\n", min_E, max_E);
+   sum_2RB = sum_2RG = 0.0;
+ 
+   for (int n1 = MinWindowSize; n1 <= MaxWindowSize / 2; n1++) {
+@@ -75,6 +76,7 @@
+             break;
+           if (!overlap(p1, p2, n1, n2)) {
+             if (e < min_E) {
++              fprintf(stderr, "PROBE level=2R flag_minE2=set old_min_E=%.17g new_min_E=%.17g\n", min_E, e);
+               min_E = e;
+               max_E = min_E + theta;
+               flag_minE2 = true;
+--- a/SIDD_3R.cpp
++++ b/SIDD_3R.cpp
+@@ -37,6 +37,7 @@
+   LstState::iterator k;
+   LstState::iterator j;
+   flag_minE3 = false;
++  fprintf(stderr, "PROBE level=3R start min_E=%.17g max_E=%.17g\n", min_E, max_E);
+   sum_3RB = sum_3RG = 0.0;
+ 
+   int window_size = 200;
+@@ -93,6 +94,7 @@
+               if (!overlap(p1, p2, n1, n2) && !overlap(p1, p3, n1, n3) &&
+                   !overlap(p2, p3, n2, n3)) {
+                 if (min_E - e >= Epsilon) {
++                  fprintf(stderr, "PROBE level=3R flag_minE3=never_set_by_code old_min_E=%.17g new_min_E=%.17g\n", min_E, e);
+                   min_E = e;
+                   max_E = e + theta;
+                 }
+--- a/SIDD_4R.cpp
++++ b/SIDD_4R.cpp
+@@ -38,6 +38,7 @@
+   LstState::iterator j;
+   LstState::iterator l;
+   flag_minE4 = false;
++  fprintf(stderr, "PROBE level=4R start min_E=%.17g max_E=%.17g\n", min_E, max_E);
+   sum_4RB = sum_4RG = 0.0;
+   int window_size = 200;
+   double Epsilon = 0.0;
+@@ -118,6 +119,7 @@
+                       !overlap(p1, p4, n1, n4) && !overlap(p2, p3, n2, n3) &&
+                       !overlap(p2, p4, n2, n4) && !overlap(p3, p4, n3, n4)) {
+                     if (min_E - e >= Epsilon) {
++                      fprintf(stderr, "PROBE level=4R flag_minE4=never_set_by_code old_min_E=%.17g new_min_E=%.17g\n", min_E, e);
+                       min_E = e;
+                       max_E = e + theta;
+                     }

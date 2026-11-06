@@ -10,6 +10,10 @@ import (
 type Result struct {
 	MinE, MaxE     float64
 	OneRunStates   int
+	TwoRunStates   int
+	ThreeRunStates int
+	FourRunStates  int
+	AvgRuns        float64
 	ZB, ZG         float64
 	GroundW        float64
 	TransitionProb float64
@@ -22,6 +26,7 @@ type candidate struct {
 	e     float64
 }
 
+// candidates returns, per run length, every window start with its nucleation-plus-base-pairing energy, stably sorted ascending so scans can stop at the first window past the energy limit.
 func candidates(m *Model) [][]candidate {
 	lists := make([][]candidate, m.MaxLen+1)
 	for n := m.MinLen; n <= m.MaxLen; n++ {
@@ -42,6 +47,7 @@ func candidates(m *Model) [][]candidate {
 	return lists
 }
 
+// minimumEnergy returns the lowest single-run state energy, or the ground energy if that is lower.
 func minimumEnergy(m *Model, lists [][]candidate) float64 {
 	minE := m.GroundEnergy()
 	for n := m.MinLen; n <= m.MaxLen; n++ {
@@ -53,6 +59,7 @@ func minimumEnergy(m *Model, lists [][]candidate) float64 {
 	return minE
 }
 
+// forEachRetained visits every single-run state with energy below minE+Threshold in length-then-energy order, passing its energy and Boltzmann weight.
 func forEachRetained(m *Model, lists [][]candidate, minE float64, visit func(s, n int, E, w float64)) {
 	maxE := minE + m.Threshold
 	for n := m.MinLen; n <= m.MaxLen; n++ {
@@ -67,10 +74,12 @@ func forEachRetained(m *Model, lists [][]candidate, minE float64, visit func(s, 
 	}
 }
 
+// isFinite reports whether x is neither NaN nor infinite.
 func isFinite(x float64) bool {
 	return !math.IsNaN(x) && !math.IsInf(x, 0)
 }
 
+// checkRepresentable rejects a minimum energy whose Boltzmann weight would underflow or overflow float64.
 func checkRepresentable(m *Model, minE float64) error {
 	peak := -minE/m.RT + Shift
 	switch {
@@ -82,7 +91,21 @@ func checkRepresentable(m *Model, minE float64) error {
 	return nil
 }
 
+// Run computes the SIDD ensemble, routing MaxRuns 1 to the byte-golden-parity runSingle and MaxRuns above 1 to runMulti.
 func Run(m *Model) (*Result, error) {
+	if m.MaxRuns > 1 {
+		return runMulti(m)
+	}
+	res, err := runSingle(m)
+	if err != nil {
+		return nil, err
+	}
+	res.AvgRuns = res.TransitionProb
+	return res, nil
+}
+
+// runSingle is the v0.4 single-run path, byte-golden-parity code with deliberately plain float64 summation that must not change.
+func runSingle(m *Model) (*Result, error) {
 	lists := candidates(m)
 	minE := minimumEnergy(m, lists)
 	if err := checkRepresentable(m, minE); err != nil {
