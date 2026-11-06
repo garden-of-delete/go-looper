@@ -213,11 +213,38 @@ func TestCompareDoctored(t *testing.T) {
 }
 
 func TestCompareMinMagnitude(t *testing.T) {
-	golden := []byte("x = 1e-15\n")
-	if mm := Compare(golden, []byte("x = 9e-14\n"), canonical); len(mm) != 0 {
-		t.Fatalf("both below floor must pass: %v", mm)
+	golden := []byte("12\tA\t1e-13\t5.5\n")
+	if mm := Compare(golden, []byte("12\tA\t2e-13\t5.5\n"), canonical); len(mm) != 0 {
+		t.Fatalf("table values both below floor must pass: %v", mm)
 	}
-	if mm := Compare(golden, []byte("x = 1e-9\n"), canonical); len(mm) != 1 {
-		t.Fatalf("one above floor must fail: %v", mm)
+	if mm := Compare(golden, []byte("12\tA\t1e-9\t5.5\n"), canonical); len(mm) != 1 {
+		t.Fatalf("table value above floor must fail: %v", mm)
+	}
+}
+
+func TestCompareHeaderFloatsIgnoreFloor(t *testing.T) {
+	golden := loadGolden(t)
+	const prefix = "Total Partition Function = "
+	idx := -1
+	for i, l := range strings.Split(string(golden), "\n") {
+		if strings.HasPrefix(l, prefix) {
+			idx = i
+		}
+	}
+	if idx < 0 {
+		t.Fatal("no Total Partition Function line")
+	}
+	for name, value := range map[string]string{
+		"scaled by 7.4":      "1.62135e-59",
+		"below floor":        "9.99999e-13",
+		"order of magnitude": "2.19101e-59",
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := replaceLine(t, golden, idx, func(string) string { return prefix + value })
+			m := single(t, Compare(golden, got, canonical))
+			if m.Line != idx+1 || m.Field != "Total Partition Function" {
+				t.Fatalf("unexpected mismatch %+v", m)
+			}
+		})
 	}
 }

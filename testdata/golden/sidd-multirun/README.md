@@ -57,11 +57,34 @@ the fixture; `-f` must be last.
 | `mr-circular-nn-synth` | `sidd_synth1600.fa` | `-c -n` | populated |
 | `mr-clamp-copoly-alt` | `pbr322.toy.fa` | `-T 315 -i 0.1 -s 0.04 -t 10` | degenerate (all multi-run counts zero) |
 | `mr-clamp-copoly-hot` | `pbr322.toy.fa` | `-T 320 -t 15 -s 0.04` | populated, three-run states > 0 |
+| `mr-circular-nn-defaults` | `pbr322.toy.fa` | `-c -n` | populated |
+| `mr-clamp-copoly-synth` | `sidd_synth1600.fa` | `(none)` | populated |
+| `mr-origin-straddle` | `pbr322_rot310.toy.fa` | `-c` | populated |
 
 Every listed case passed the probe gate. `mr-clamp-copoly-alt` is intentionally
 degenerate: at these parameters SIST finds no two-, three- or four-run states, so it
 pins the multi-run line set printing zero counts. `verify_case` enforces each
 expectation.
+
+## v1 parameter-set coverage
+
+The v1 matrix (`testdata/golden/sidd/README.md`) has eight parameter sets. This
+matrix covers seven: clamp-copoly-defaults, clamp-nn-defaults, circular-copoly-defaults,
+circular-nn-defaults, clamp-copoly-synth, circular-nn-synth and clamp-copoly-alt
+(`mr-clamp-copoly-alt`). `circular-nn-alt` (sidd_synth1600.fa, `-c -n -T 300 -i 0.05
+-s 0.07 -t 11`) is not covered. `mr-clamp-copoly-hot` has no v1 counterpart. The
+`mr-circular-nn-defaults` and `mr-clamp-copoly-synth` cases close audit finding 6a
+for the two sets the first matrix dropped.
+
+## Origin-straddle case
+
+`mr-origin-straddle` runs the circular copolymeric defaults on `pbr322_rot310.toy.fa`,
+pbr322 rotated by 310 bp so the dominant melting site (1-based positions 286-329 in
+the original golden tables, as printed) straddles the origin: it spans the
+last and first bases of the sequence, so its runs cross index 0. The M13 separation
+rule is not rotation-invariant (the three-versus-one gap asymmetry depends on runs
+touching the last index), so its counts may legitimately differ from `mr-circular-copoly-defaults`; the
+golden comparison is the gate, and no rotation-invariance is asserted.
 
 ## No four-run case
 
@@ -83,3 +106,12 @@ Unexplored regions: stress 0.05 with T between 310 and 320, and salt between 0.0
 
 - `testdata/fixtures/pbr322.toy.fa`: verbatim copy of `SIST/tests/regression/data/pbr322.toy.fa`.
 - `testdata/fixtures/sidd_synth1600.fa`: see `testdata/golden/sidd/README.md`.
+- `testdata/fixtures/pbr322_rot310.toy.fa`: pbr322.toy.fa rotated by 310 bp, generated
+  from the repo root with:
+
+```
+python3 -I -c "
+s=''.join(l.strip() for l in open('testdata/fixtures/pbr322.toy.fa'))
+r=s[310:]+s[:310]
+[print(r[i:i+70]) for i in range(0,len(r),70)]" > testdata/fixtures/pbr322_rot310.toy.fa
+```

@@ -331,53 +331,88 @@ func TestCapsOnVisitedStates(t *testing.T) {
 }
 
 func TestTwoPhaseWindow(t *testing.T) {
-	island := strings.Repeat("A", 15)
-	gc := strings.Repeat("G", 40)
-	seq := []byte(island + gc + island + gc)
-	m := newTestModel(t, seq, func(p *Params) {
-		p.Geometry = GeomCircular
-		p.MaxLen = 30
-		p.MaxRuns = 2
-		p.Sigma = -0.4
-		p.Threshold = 3
-	})
+	cases := []struct {
+		name           string
+		islands        int
+		island, gc     int
+		minLen, maxLen int
+		sigma, theta   float64
+	}{
+		{name: "2R", islands: 2, island: 15, gc: 40, minLen: 1, maxLen: 30, sigma: -0.4, theta: 3},
+		{name: "3R", islands: 3, island: 10, gc: 20, minLen: 10, maxLen: 10, sigma: -0.5, theta: 15},
+		{name: "4R", islands: 4, island: 10, gc: 20, minLen: 10, maxLen: 10, sigma: -0.75, theta: 12},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			seq := []byte(strings.Repeat(strings.Repeat("A", tc.island)+strings.Repeat("G", tc.gc), tc.islands))
+			m := newTestModel(t, seq, func(p *Params) {
+				p.Geometry = GeomCircular
+				p.MinLen = tc.minLen
+				p.MaxLen = tc.maxLen
+				p.MaxRuns = tc.islands
+				p.Sigma = tc.sigma
+				p.Threshold = tc.theta
+			})
 
-	oneMin, all := naiveEnergies(m)
-	twoMin := math.Inf(1)
-	windows := naiveWindows(m)
-	for _, a := range windows {
-		for _, b := range windows {
-			if a[1] > b[1] || a[1] > m.MaxLen/2 || a[1]+b[1] > m.MaxLen {
-				continue
+			want := naiveMultiRun(m, tc.islands, tc.theta)
+			lower := naiveMultiRun(m, tc.islands-1, tc.theta)
+			if !(want.MinE < lower.MinE) {
+				t.Fatalf("setup: %d-run minimum %v is not below the %d-run minimum %v", tc.islands, want.MinE, tc.islands-1, lower.MinE)
 			}
-			E := Nucleation + m.WindowEnergy(a[0], a[1]) + Nucleation + m.WindowEnergy(b[0], b[1]) + m.GRes(a[1]+b[1])
-			if E < twoMin && refSeparated(a[0], a[1], b[0], b[1], m.EngLen) {
-				twoMin = E
+			if want.Counts[1] == 0 && tc.islands < 4 {
+				t.Fatal("setup: no one-run states within the window of the global minimum")
 			}
-		}
+
+			res, err := Run(m)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if math.Abs(res.MinE-want.MinE) > 1e-12 {
+				t.Errorf("MinE = %v, want %d-run minimum %v", res.MinE, tc.islands, want.MinE)
+			}
+			if res.OneRunStates != want.Counts[1] {
+				t.Errorf("OneRunStates = %d, want %d", res.OneRunStates, want.Counts[1])
+			}
+			got := [5]int{0, res.OneRunStates, res.TwoRunStates, res.ThreeRunStates, res.FourRunStates}
+			if got != want.Counts {
+				t.Errorf("state counts = %v, want %v", got[1:], want.Counts[1:])
+			}
+			if want.Counts[tc.islands] == 0 {
+				t.Errorf("setup: no %d-run states retained", tc.islands)
+			}
+		})
 	}
-	if !(twoMin < oneMin) {
-		t.Fatalf("setup: two-run minimum %v is not below the one-run minimum %v", twoMin, oneMin)
+}
+
+func TestGuardAnchoredOnGlobalMinimum(t *testing.T) {
+	seq := []byte(strings.Repeat(strings.Repeat("A", 50)+strings.Repeat("G", 20), 4))
+	build := func(runs int) *Model {
+		return newTestModel(t, seq, func(p *Params) {
+			p.Geometry = GeomCircular
+			p.Temperature = 450
+			p.MinLen = 50
+			p.MaxLen = 50
+			p.MaxRuns = runs
+			p.Threshold = 3
+		})
+	}
+	overflowAt := func(m *Model, minE float64) bool {
+		return -minE/m.RT+Shift > math.Log(math.MaxFloat64)
 	}
 
-	res, err := Run(m)
-	if err != nil {
-		t.Fatal(err)
+	m := build(4)
+	lists := candidates(m)
+	if overflowAt(m, minimumEnergy(m, lists)) {
+		t.Fatal("setup: the one-run minimum alone already trips the overflow guard")
 	}
-	if math.Abs(res.MinE-twoMin) > 1e-12 {
-		t.Errorf("MinE = %v, want two-run minimum %v", res.MinE, twoMin)
+	if !overflowAt(m, globalMinimum(m, lists)) {
+		t.Fatal("setup: the multi-run global minimum does not trip the overflow guard")
 	}
-	want := 0
-	for _, E := range all {
-		if E < twoMin+m.Threshold {
-			want++
-		}
+	if _, err := Run(m); err == nil || !strings.Contains(err.Error(), "melting point") {
+		t.Fatalf("error = %v, want the overflow error anchored on the global minimum", err)
 	}
-	if want == 0 {
-		t.Fatal("setup: no one-run states within the window of the two-run minimum")
-	}
-	if res.OneRunStates != want {
-		t.Errorf("OneRunStates = %d, want %d", res.OneRunStates, want)
+	if _, err := Run(build(1)); err != nil {
+		t.Fatalf("one-run control failed: %v", err)
 	}
 }
 

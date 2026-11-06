@@ -142,6 +142,9 @@ func TestEndToEndMultiRunMatrix(t *testing.T) {
 		{"mr-circular-nn-synth", "sidd_synth1600.fa", []string{"--circular", "--nearest-neighbor"}},
 		{"mr-clamp-copoly-alt", "pbr322.toy.fa", []string{"--clamp", "--temperature", "315", "--salt", "0.1", "--sigma", "-0.04", "--threshold", "10"}},
 		{"mr-clamp-copoly-hot", "pbr322.toy.fa", []string{"--clamp", "--temperature", "320", "--threshold", "15", "--sigma", "-0.04"}},
+		{"mr-circular-nn-defaults", "pbr322.toy.fa", []string{"--circular", "--nearest-neighbor"}},
+		{"mr-clamp-copoly-synth", "sidd_synth1600.fa", []string{"--clamp"}},
+		{"mr-origin-straddle", "pbr322_rot310.toy.fa", []string{"--circular"}},
 	}
 	tol := goldencmp.Tolerances{FloatRel: 1e-6, MinMagnitude: 1e-12}
 	for _, tc := range cases {

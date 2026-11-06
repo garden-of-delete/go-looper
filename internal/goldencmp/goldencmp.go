@@ -53,9 +53,9 @@ func compareLine(line int, golden, got string, tol Tolerances) []Mismatch {
 				return tableColumns[i]
 			}
 			return fmt.Sprintf("column %d", i)
-		}, tol)
+		}, tol, isTable)
 	}
-	return compareTokens(line, strings.Split(golden, " "), strings.Split(got, " "), textFieldName, tol)
+	return compareTokens(line, strings.Split(golden, " "), strings.Split(got, " "), textFieldName, tol, false)
 }
 
 func textFieldName(tokens []string, i int) string {
@@ -77,7 +77,7 @@ func textFieldName(tokens []string, i int) string {
 	return strings.Join(words, " ")
 }
 
-func compareTokens(line int, golden, got []string, name func([]string, int) string, tol Tolerances) []Mismatch {
+func compareTokens(line int, golden, got []string, name func([]string, int) string, tol Tolerances, floor bool) []Mismatch {
 	var out []Mismatch
 	if len(golden) != len(got) {
 		out = append(out, Mismatch{
@@ -89,7 +89,7 @@ func compareTokens(line int, golden, got []string, name func([]string, int) stri
 		})
 	}
 	for i := 0; i < min(len(golden), len(got)); i++ {
-		if m, ok := compareToken(golden[i], got[i], tol); !ok {
+		if m, ok := compareToken(golden[i], got[i], tol, floor); !ok {
 			m.Line = line
 			m.Field = name(golden, i)
 			out = append(out, m)
@@ -120,7 +120,7 @@ func relDiff(golden, got string) float64 {
 	return math.Abs(rv-gv) / math.Abs(gv)
 }
 
-func compareToken(golden, got string, tol Tolerances) (Mismatch, bool) {
+func compareToken(golden, got string, tol Tolerances, floor bool) (Mismatch, bool) {
 	m := Mismatch{Golden: golden, Got: got, RelDiff: relDiff(golden, got)}
 	if golden == got {
 		return m, true
@@ -130,7 +130,7 @@ func compareToken(golden, got string, tol Tolerances) (Mismatch, bool) {
 	}
 	gv, _ := strconv.ParseFloat(golden, 64)
 	rv, _ := strconv.ParseFloat(got, 64)
-	if math.Abs(gv) <= tol.MinMagnitude || math.Abs(rv) <= tol.MinMagnitude {
+	if floor && (math.Abs(gv) <= tol.MinMagnitude || math.Abs(rv) <= tol.MinMagnitude) {
 		return m, math.Abs(gv) <= tol.MinMagnitude && math.Abs(rv) <= tol.MinMagnitude
 	}
 	return m, m.RelDiff <= tol.FloatRel

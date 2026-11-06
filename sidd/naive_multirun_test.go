@@ -438,6 +438,13 @@ func assertProfileAnchor(t *testing.T, leg anchorLeg, size anchorSize, theta flo
 	if len(res.P) != m.SeqLen || len(res.G) != m.SeqLen {
 		t.Fatalf("profile lengths P %d, G %d, want %d", len(res.P), len(res.G), m.SeqLen)
 	}
+	var melted anchorSum
+	for x := range sumB {
+		melted.add(sumB[x].value() / zb)
+	}
+	if !anchorClose(res.MeltedBases, melted.value()) {
+		t.Errorf("MeltedBases = %v, want %v", res.MeltedBases, melted.value())
+	}
 	for x := 0; x < m.SeqLen; x++ {
 		if !anchorClose(res.P[x], sumB[x].value()/zb) {
 			t.Errorf("P[%d] = %v, want %v", x, res.P[x], sumB[x].value()/zb)

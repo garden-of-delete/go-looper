@@ -172,6 +172,25 @@ func TestReportMultiRunParity_CircularNNSynth(t *testing.T) {
 	})
 }
 
+func TestReportMultiRunParity_CircularNNDefaults(t *testing.T) {
+	assertMultiRunParity(t, "mr-circular-nn-defaults", "pbr322.toy.fa", func(p *Params) {
+		p.Geometry = GeomCircular
+		p.NearestNeighbor = true
+	})
+}
+
+func TestReportMultiRunParity_ClampCopolySynth(t *testing.T) {
+	assertMultiRunParity(t, "mr-clamp-copoly-synth", "sidd_synth1600.fa", func(p *Params) {
+		p.Geometry = GeomClamp
+	})
+}
+
+func TestReportMultiRunParity_OriginStraddle(t *testing.T) {
+	assertMultiRunParity(t, "mr-origin-straddle", "pbr322_rot310.toy.fa", func(p *Params) {
+		p.Geometry = GeomCircular
+	})
+}
+
 func TestReportMultiRunParity_ClampCopolyAlt(t *testing.T) {
 	assertMultiRunParity(t, "mr-clamp-copoly-alt", "pbr322.toy.fa", func(p *Params) {
 		p.Geometry = GeomClamp
