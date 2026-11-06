@@ -19,7 +19,7 @@ import (
 
 type options struct {
 	infile, outfile, tracks string
-	domain                  string
+	domain, maxRuns         string
 	clamp, circular         bool
 	params                  sidd.Params
 }
@@ -33,6 +33,14 @@ func parseDomain(s string) (float64, error) {
 		return 0, fmt.Errorf("--N must be a positive integer or \"auto\", got %q", s)
 	}
 	return float64(n), nil
+}
+
+func parseMaxRuns(s string) (int, error) {
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 1 || n > 4 {
+		return 0, fmt.Errorf("--max-runs must be an integer in the range 1-4, got %q", s)
+	}
+	return n, nil
 }
 
 func (o *options) resolveParams() (sidd.Params, error) {
@@ -51,6 +59,10 @@ func (o *options) resolveParams() (sidd.Params, error) {
 		return p, err
 	}
 	p.N = n
+	p.MaxRuns, err = parseMaxRuns(o.maxRuns)
+	if err != nil {
+		return p, err
+	}
 	return p, nil
 }
 
@@ -161,11 +173,10 @@ func writeFile(name string, write func(*os.File) error) error {
 
 func newRootCmd() *cobra.Command {
 	o := &options{params: sidd.DefaultParams()}
-	o.params.MaxRuns = 1
 	cmd := &cobra.Command{
 		Use:     "golooper-sidd",
 		Short:   "golooper-sidd computes SIDD strand-separation profiles for a single DNA sequence.",
-		Version: "golooper-sidd v0.4.0",
+		Version: "golooper-sidd v0.5.0",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
@@ -183,6 +194,7 @@ func newRootCmd() *cobra.Command {
 	f.IntVar(&o.params.MinLen, "minlength", o.params.MinLen, "minimum melted-run length in bases")
 	f.IntVar(&o.params.MaxLen, "maxlength", o.params.MaxLen, "maximum melted-run length in bases")
 	f.StringVar(&o.domain, "N", "auto", "superhelical domain size: \"auto\" uses the sequence length (the padded length under --clamp); an explicit positive integer is used verbatim with no +50 adjustment")
+	f.StringVar(&o.maxRuns, "max-runs", strconv.Itoa(o.params.MaxRuns), "maximum number of simultaneous denatured runs per state, 1-4 (SIST's structural cap is 4 and SIST has no such parameter; this is a go-looper extension); 1 reproduces the v0.4 single-run model byte-for-byte")
 	f.BoolVar(&o.params.NearestNeighbor, "nearest-neighbor", false, "use nearest-neighbor energetics (requires --clamp or --circular)")
 	f.BoolVar(&o.circular, "circular", false, "treat the sequence as a circular molecule")
 	f.BoolVar(&o.clamp, "clamp", false, "append a 50-G clamp to the linear sequence (SIST's default geometry)")

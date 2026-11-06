@@ -7,11 +7,15 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"golooper/internal/goldencmp"
 )
 
 const (
 	fixturesDir = "../../testdata/fixtures"
 	goldenDir   = "../../testdata/golden/sidd"
+
+	multiRunGoldenDir = "../../testdata/golden/sidd-multirun"
 )
 
 func chdir(t *testing.T, dir string) {
@@ -95,7 +99,7 @@ func TestFlagValidation(t *testing.T) {
 	}
 }
 
-func TestEndToEndParityMatrix(t *testing.T) {
+func TestEndToEndByteMatrix(t *testing.T) {
 	cases := []struct {
 		name, fixture string
 		flags         []string
@@ -116,12 +120,64 @@ func TestEndToEndParityMatrix(t *testing.T) {
 				t.Fatal(err)
 			}
 			dir := stageFixture(t, tc.fixture)
-			got, err := runIn(t, dir, append([]string{"-f", tc.fixture}, tc.flags...)...)
+			got, err := runIn(t, dir, append([]string{"-f", tc.fixture, "--max-runs", "1"}, tc.flags...)...)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if got != string(want) {
 				t.Fatalf("output differs from golden\n%s", firstDiff(string(want), got))
+			}
+		})
+	}
+}
+
+func TestEndToEndMultiRunMatrix(t *testing.T) {
+	cases := []struct {
+		name, fixture string
+		flags         []string
+	}{
+		{"mr-clamp-copoly-defaults", "pbr322.toy.fa", []string{"--clamp"}},
+		{"mr-clamp-nn-defaults", "pbr322.toy.fa", []string{"--clamp", "--nearest-neighbor"}},
+		{"mr-circular-copoly-defaults", "pbr322.toy.fa", []string{"--circular"}},
+		{"mr-circular-nn-synth", "sidd_synth1600.fa", []string{"--circular", "--nearest-neighbor"}},
+		{"mr-clamp-copoly-alt", "pbr322.toy.fa", []string{"--clamp", "--temperature", "315", "--salt", "0.1", "--sigma", "-0.04", "--threshold", "10"}},
+		{"mr-clamp-copoly-hot", "pbr322.toy.fa", []string{"--clamp", "--temperature", "320", "--threshold", "15", "--sigma", "-0.04"}},
+	}
+	tol := goldencmp.Tolerances{FloatRel: 1e-6, MinMagnitude: 1e-12}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			want, err := os.ReadFile(filepath.Join(multiRunGoldenDir, tc.name, "stdout.txt"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			dir := stageFixture(t, tc.fixture)
+			got, err := runIn(t, dir, append([]string{"-f", tc.fixture}, tc.flags...)...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, m := range goldencmp.Compare(want, []byte(got), tol) {
+				t.Error(m)
+			}
+		})
+	}
+}
+
+func TestMaxRunsFlag(t *testing.T) {
+	short := ">s\nACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT\n"
+	for _, v := range []string{"0", "5", "-1", "x", "2.5"} {
+		t.Run("rejects "+v, func(t *testing.T) {
+			dir := stageContent(t, "in.fa", []byte(short))
+			_, err := runIn(t, dir, "-f", "in.fa", "--clamp", "--max-runs", v)
+			if err == nil || !strings.Contains(err.Error(), "--max-runs") || !strings.Contains(err.Error(), "1-4") {
+				t.Fatalf("error = %v, want naming --max-runs and 1-4", err)
+			}
+		})
+	}
+	for _, v := range []string{"1", "4"} {
+		t.Run("accepts "+v, func(t *testing.T) {
+			dir := stageContent(t, "in.fa", []byte(short))
+			if _, err := runIn(t, dir, "-f", "in.fa", "--clamp", "--maxlength", "20", "--max-runs", v); err != nil {
+				t.Fatal(err)
 			}
 		})
 	}
@@ -145,6 +201,15 @@ func firstDiff(want, got string) string {
 }
 
 func TestTracks(t *testing.T) {
+	for _, mode := range []struct {
+		name string
+		args []string
+	}{{"single-run", []string{"--max-runs", "1"}}, {"multi-run", nil}} {
+		t.Run(mode.name, func(t *testing.T) { testTracks(t, mode.args) })
+	}
+}
+
+func testTracks(t *testing.T, extra []string) {
 	raw, err := os.ReadFile(filepath.Join(fixturesDir, "pbr322.toy.fa"))
 	if err != nil {
 		t.Fatal(err)
@@ -164,7 +229,7 @@ func TestTracks(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := stageContent(t, tt.file, []byte(tt.content))
-			report, err := runIn(t, dir, "-f", tt.file, "--clamp", "--tracks", "trk")
+			report, err := runIn(t, dir, append([]string{"-f", tt.file, "--clamp", "--tracks", "trk"}, extra...)...)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -237,7 +302,7 @@ func TestVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out != "golooper-sidd v0.4.0\n" {
+	if out != "golooper-sidd v0.5.0\n" {
 		t.Fatalf("version output = %q", out)
 	}
 }
