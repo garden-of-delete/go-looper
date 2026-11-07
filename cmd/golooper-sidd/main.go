@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -20,6 +23,7 @@ import (
 type options struct {
 	infile, outfile, tracks string
 	domain, maxRuns         string
+	provenance              string
 	clamp, circular         bool
 	params                  sidd.Params
 }
@@ -110,6 +114,15 @@ func (o *options) run(cmd *cobra.Command) error {
 		return err
 	}
 
+	if o.provenance != "" {
+		err = writeFile(o.provenance, func(f *os.File) error {
+			return writeProvenance(f, o, cmd.Version, model, gene)
+		})
+		if err != nil {
+			return err
+		}
+	}
+
 	if o.tracks == "" {
 		return nil
 	}
@@ -167,6 +180,41 @@ func startsWithFasta(data []byte) bool {
 	return false
 }
 
+// writeProvenance records the invocation, the resolved parameters and the input identity so that an archived report can be traced back to the run that produced it; the report itself carries SIST's line set and cannot name these.
+func writeProvenance(w io.Writer, o *options, version string, m *sidd.Model, gene *rlooper.Gene) error {
+	geometry := "linear"
+	switch m.Geometry {
+	case sidd.GeomClamp:
+		geometry = "clamp"
+	case sidd.GeomCircular:
+		geometry = "circular"
+	}
+	energetics := "copolymeric"
+	if m.NearestNeighbor {
+		energetics = "nearest-neighbor"
+	}
+	sum := sha256.Sum256(gene.Sequence)
+	bw := bufio.NewWriter(w)
+	fmt.Fprintf(bw, "version: %s\n", version)
+	fmt.Fprintf(bw, "command: %s\n", strings.Join(os.Args, " "))
+	fmt.Fprintf(bw, "input file: %s\n", o.infile)
+	fmt.Fprintf(bw, "record name: %s\n", gene.Name)
+	fmt.Fprintf(bw, "sequence length: %d\n", m.SeqLen)
+	fmt.Fprintf(bw, "sequence sha256: %s\n", hex.EncodeToString(sum[:]))
+	fmt.Fprintf(bw, "geometry: %s\n", geometry)
+	fmt.Fprintf(bw, "energetics: %s\n", energetics)
+	fmt.Fprintf(bw, "max runs: %d\n", m.MaxRuns)
+	fmt.Fprintf(bw, "sigma: %s\n", sidd.FormatSIST(m.Sigma))
+	fmt.Fprintf(bw, "temperature: %s\n", sidd.FormatSIST(m.Temperature))
+	fmt.Fprintf(bw, "salt: %s\n", sidd.FormatSIST(m.Salt))
+	fmt.Fprintf(bw, "threshold: %s\n", sidd.FormatSIST(m.Threshold))
+	fmt.Fprintf(bw, "min length: %d\n", m.MinLen)
+	fmt.Fprintf(bw, "max length: %d\n", m.MaxLen)
+	fmt.Fprintf(bw, "domain size: %s (%s)\n", sidd.FormatSIST(m.N), o.domain)
+	fmt.Fprintf(bw, "engine length: %d\n", m.EngLen)
+	return bw.Flush()
+}
+
 // writeFile creates name, runs write on it, and returns the first write or close error.
 func writeFile(name string, write func(*os.File) error) error {
 	f, err := os.Create(name)
@@ -197,6 +245,7 @@ func newRootCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.StringVarP(&o.infile, "infile", "f", "", "input FASTA file with exactly one record (required)")
 	f.StringVarP(&o.outfile, "outfile", "o", "", "output report file (default stdout)")
+	f.StringVar(&o.provenance, "provenance", "", "write the invocation, the resolved parameters and the input checksum to this file; the report follows SIST's line set and cannot record them")
 	f.Float64Var(&o.params.Sigma, "sigma", o.params.Sigma, "superhelical density, signed; SIST's positive-magnitude convention maps to a negative value here")
 	f.Float64Var(&o.params.Temperature, "temperature", o.params.Temperature, "temperature in kelvin")
 	f.Float64Var(&o.params.Salt, "salt", o.params.Salt, "salt concentration in molar")
