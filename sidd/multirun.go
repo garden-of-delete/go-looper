@@ -130,7 +130,7 @@ func (s *classScan) lengths(level, prev, sum int, headSum float64) {
 	}
 }
 
-// positions enumerates start positions for the runs of the current length tuple, starting past the previous pick when lengths are equal so each unordered pair is visited once (fixing SIST's duplicate-pair bug). The runs slice handed to visit is a reused window into s and is overwritten on the next state; callers must not retain it.
+// positions enumerates start positions for the runs of the current length tuple, starting past the previous pick when lengths are equal so each unordered set of runs is visited once, where SIST visits such a set under both orderings. The runs slice handed to visit is a reused window into s and is overwritten on the next state; callers must not retain it.
 func (s *classScan) positions(level int, eSum float64) {
 	n := s.lens[level]
 	list := s.lists[n]

@@ -92,7 +92,7 @@ Reading circular output: a `--dump`/`--top` row with `stop < start` is a structu
 
 ## Strand separation (`golooper-sidd`)
 
-`golooper-sidd` is a second binary, built alongside `golooper` by `make build` (or `go build -o golooper-sidd ./cmd/golooper-sidd`). It computes the stress-induced duplex destabilization (SIDD) model of Benham for a single DNA sequence: the equilibrium ensemble of locally melted regions in a superhelically stressed molecule. It reports, for each base, the probability P(x) that the base is melted and the ensemble-average free energy G(x) of opening it.
+`golooper-sidd` is a second binary, built alongside `golooper` by `make build` (or `go build -o golooper-sidd ./cmd/golooper-sidd`). It computes the stress-induced duplex destabilization (SIDD) model of Benham et al. for a single DNA sequence: the equilibrium ensemble of locally melted regions in a superhelically stressed molecule. It reports, for each base, the probability P(x) that the base is melted and the ensemble-average free energy G(x) of opening it.
 
 By default a state carries one to four simultaneous denatured runs, which is SIST's own convention and its published structural cap. `--max-runs N` (1 to 4) narrows that cap. `--max-runs 1` restricts the ensemble to the fully base-paired ground state plus every single melted window — the model this tool computed before multi-run support was added — and its output is unchanged from that earlier version, byte for byte.
 
@@ -109,7 +109,7 @@ golooper-sidd -f plasmid.fa --circular --max-runs 1
 golooper-sidd -f sequence.fa --clamp -o report.txt --tracks results
 ```
 
-`--tracks results` writes `results_sidd_bpprob.wig` (P(x)) and `results_sidd_gx.wig` (G(x)). In multi-run mode the report is SIST's full line set: a parameter and ensemble header, the one-, two-, three- and four-run state counts, the total number of states, the partition function, the scaling factor, the average number of runs, the transition probability and the melted-base count, followed by a `Position  Base  P(x)  G(x)` table (SIST's run time line is not printed). The report does not record `--max-runs`, so runs that differ only in a non-binding cap produce identical output, and a zero three- or four-run count means none were found at these parameters, not that those classes were not modelled. With `--max-runs 1` the report is a shorter layout, matching what SIST prints when only its single-run search is active.
+`--tracks results` writes `results_sidd_bpprob.wig` (P(x)) and `results_sidd_gx.wig` (G(x)). In multi-run mode the report is SIST's full line set: a parameter and ensemble header, the one-, two-, three- and four-run state counts, the total number of states, the partition function, the scaling factor, the average number of runs, the transition probability and the melted-base count, followed by a `Position  Base  P(x)  G(x)` table (SIST's run time line is not printed). Because the report follows SIST's line set, it does not record `--max-runs`, `--N`, `--minlength` or `--maxlength`: two runs that differ only in a cap that never binds produce identical output, and a zero three- or four-run count means none were found at these parameters, not that those classes were not modelled. Pass `--provenance <file>` to write those alongside the report — the invocation, the resolved parameters (including the domain size `--N auto` resolved to), and a checksum of the input sequence. Worth using for anything you intend to keep. With `--max-runs 1` the report is a shorter layout, matching what SIST prints when only its single-run search is active.
 
 SIST's recommended input range is 1,500-10,000 bp. Multi-run mode is far slower than single-run because its state space is far larger, as in SIST itself: measured on one machine, about 3 s at 4.4 kb, about 70 s at 10 kb and a few minutes at 20 kb, against well under a second for `--max-runs 1` on the same inputs (memory roughly 60 MB at 4.4 kb to 270 MB at 20 kb). A long multi-run job has not hung. Much longer sequences at the default sigma make every single-domain state's Boltzmann weight underflow, and the tool reports an error rather than printing wrong numbers. `--sigma` must be less than or equal to 0; SIST's positive-magnitude `-s` value corresponds to a negative `--sigma` here.
 
@@ -124,15 +124,19 @@ Two enumeration conventions here differ deliberately from SIST's, and both apply
 
 These are the only intended departures, and they do change the numbers. On pBR322 with `--clamp` at default settings, compared with an unmodified SIST build: state counts are roughly 1% to 4% lower, the total number of states 2.0% lower, the partition function 1.6% lower, the melted-base count 0.04% higher, and the largest per-base probability difference is 4.2% relative. Constants, energetics, geometry and report format mirror SIST throughout.
 
-**What is validated, and against what.**
-
-- **Single-run mode** (`--max-runs 1`) is byte-identical to a build of SIST whose two-, three- and four-run searches are switched off, over eight recorded outputs in `testdata/golden/sidd/`. `scripts/gen-sidd-goldens.sh` regenerates them and records the build details.
-- **Multi-run mode** is compared numerically rather than byte for byte, over nine recorded outputs in `testdata/golden/sidd-multirun/`, regenerated by `scripts/gen-multirun-goldens.sh`. Counts and labels must agree exactly, and printed floating-point values to a relative 1e-6. The build used for that comparison adopts the same repeated-run-length convention described above, so the two programs enumerate the same states and only their arithmetic can differ. Those sums run over millions of states, so the multi-run accumulators use Neumaier compensated summation to bound the rounding error that plain left-to-right addition accumulates; single-run mode keeps plain summation, which is what allows its byte-for-byte match. The retention-window convention is left as SIST has it; instead each case is admitted only after an instrumented build confirms that no state encountered later in the search lowers the minimum energy, which makes the two window conventions coincide for that case.
-- **Four-run states** are not covered by any of these comparisons. A parameter sweep found no setting that both produces them and satisfies that admission check within a workable runtime, and the sweep was not exhaustive. They are checked instead against an independent brute-force enumerator, which agrees with the engine to a relative 1e-12 on short sequences.
-
-`testdata/golden/sidd/README.md` and `testdata/golden/sidd-multirun/README.md` record how each set of reference outputs was produced, including the SIST commit, the build, and the checks each case had to pass.
-
 SIST at these settings sums over states with up to four melted runs, and at pBR322 defaults its ensemble averages about 1.94 runs per state. The single-run model is therefore a physical approximation of it: on pBR322 at clamp defaults, SIST reports 79.5644 melted bases against 43.3706 for `--max-runs 1`, and the weaker site near position 3250 reaches a probability of 0.915 in SIST and 0.109 in the single-run model. Competition between R-loops and bubbles is not implemented.
+
+### Validation against SIST
+
+Single-run mode reproduces SIST exactly. Under `--max-runs 1` the report is byte-identical to that of a SIST build with its two-, three- and four-run searches disabled, over eight cases covering both geometries SIST supports, both energetics models, two sequences and one non-default parameter set.
+
+Multi-run mode is compared numerically rather than byte for byte, over nine cases. Integer state counts and all labels agree exactly, and printed floating-point values agree to a relative 1e-6, which at six significant digits is agreement in every printed digit. The comparison is numerical because the multi-run sums run over millions of states and are accumulated with Neumaier compensated summation, where SIST and single-run mode add left to right. The build used for the comparison adopts the repeated-run-length convention described above, so that both programs enumerate the same states. Its retention-window convention is left as SIST's; each case was admitted only after an instrumented build confirmed that no state found later in the search lowers the minimum energy, the condition under which the two conventions retain the same states.
+
+The engine is also checked against a brute-force enumerator written from the model definition rather than from the engine, sharing no enumeration code with it. On short sequences the two agree to a relative 1e-12 in the partition function, the per-class state counts, the per-base probabilities and energies, and the melted-base total, across all three geometries and both energetics models.
+
+Four-run states are the one class with no SIST reference case, because every parameter point found that produces them also exercises SIST's advancing-window convention, leaving the comparison build inequivalent there. They rest on the brute-force enumerator alone, however their energies are those of the one-, two- and three-run classes, which are checked against SIST, so what the enumerator alone supports is the four-run enumeration itself.
+
+Provenance for every reference output, including the SIST commit, the compiler, the patches applied and the checks each case had to pass, is recorded in `testdata/golden/sidd/README.md` and `testdata/golden/sidd-multirun/README.md`; `scripts/gen-sidd-goldens.sh` and `scripts/gen-multirun-goldens.sh` regenerate them.
 
 If you use `golooper-sidd`, cite the SIST paper, which its authors require for any use of these algorithms, and the paper describing the strand-separation method:
 
@@ -161,6 +165,7 @@ SIST's MIT license and the list of material derived from SIST are in [NOTICE](NO
 | `--N` | none | superhelical domain size; see below |
 | `--minlength`, `--maxlength` | none | bounds on the length of a single melted run, defaults 1 and 250. In multi-run mode `--maxlength` also caps the combined length of a two-run state, while three- and four-run states are capped at a combined 200 bp that it does not change; SIST has no flag for either bound (its maximum window size is fixed at 250) |
 | `--tracks` | none | wig output prefix |
+| `--provenance` | none | write the invocation, the resolved parameters and the input checksum to this file; the report cannot record them without diverging from SIST's line set |
 
 Geometry is explicit. With neither `--clamp` nor `--circular`, the molecule is true linear DNA. SIST's default linear geometry is the clamped one, so `--clamp` is the setting that reproduces SIST's default. `--clamp` and `--circular` are mutually exclusive.
 

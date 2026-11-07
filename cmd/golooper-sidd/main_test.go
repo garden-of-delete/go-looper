@@ -312,6 +312,65 @@ func TestOutfile(t *testing.T) {
 	}
 }
 
+// TestProvenance pins that --provenance records the resolved parameters, leaves the report byte-identical, and distinguishes runs the report alone cannot.
+func TestProvenance(t *testing.T) {
+	dir := stageFixture(t, "pbr322.toy.fa")
+	plain, err := runIn(t, dir, "-f", "pbr322.toy.fa", "--clamp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	withProv, err := runIn(t, dir, "-f", "pbr322.toy.fa", "--clamp", "--provenance", "run.params")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withProv != plain {
+		t.Fatalf("--provenance changed the report\n%s", firstDiff(plain, withProv))
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "run.params"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"version: golooper-sidd v0.5.0",
+		"input file: pbr322.toy.fa",
+		"sequence length: 4361",
+		"geometry: clamp",
+		"energetics: copolymeric",
+		"max runs: 4",
+		"domain size: 4411 (auto)",
+		"engine length: 4411",
+		"sequence sha256: ",
+	} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("provenance missing %q, got:\n%s", want, got)
+		}
+	}
+
+	// Two runs whose reports are identical because the narrower cap never binds must still be distinguishable.
+	twoRuns, err := runIn(t, dir, "-f", "pbr322.toy.fa", "--clamp", "--temperature", "315", "--salt", "0.1", "--sigma", "-0.04", "--threshold", "10", "--provenance", "two.params")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fourRuns, err := runIn(t, dir, "-f", "pbr322.toy.fa", "--clamp", "--temperature", "315", "--salt", "0.1", "--sigma", "-0.04", "--threshold", "10", "--max-runs", "2", "--provenance", "four.params")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if twoRuns != fourRuns {
+		t.Fatal("expected identical reports for a non-binding cap change; the premise of this test no longer holds")
+	}
+	a, err := os.ReadFile(filepath.Join(dir, "two.params"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "four.params"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(a) == string(b) {
+		t.Error("provenance is identical for runs with different --max-runs; it does not record the model")
+	}
+}
+
 // TestVersion pins the --version output.
 func TestVersion(t *testing.T) {
 	out, err := runIn(t, t.TempDir(), "--version")
